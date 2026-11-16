@@ -1,6 +1,6 @@
 import './illinoisAgencyDirectory.css';
 
-export interface IllinoisAgency { code: string; name: string; rows: number; page: number }
+export interface IllinoisAgency { code: string; name: string; rows: number; page: number; summaryPage: number; incomplete: boolean }
 interface Directory { year: number; rows: number; report: string; agencies: IllinoisAgency[] }
 
 export function matchingAgencies(agencies: IllinoisAgency[], query: string) {
@@ -73,7 +73,13 @@ function renderDirectory(body: HTMLElement, data: Directory) {
       const item = document.createElement('li');
       const count = document.createElement('strong');
       count.textContent = agency.rows.toLocaleString();
-      item.append(sourceLink(data.report + '#page=' + agency.page, agency.name), ' (' + agency.code + ') · ', count);
+      item.append(sourceLink(data.report + '#page=' + agency.summaryPage, agency.name), ' (',
+        sourceLink(data.report + '#page=' + agency.page, agency.code), ') · ', count);
+      if (agency.incomplete) {
+        const note = document.createElement('small');
+        note.textContent = 'IDOT marks this agency’s 2025 submission as incomplete.';
+        item.append(note);
+      }
       if (agency.code === '13478') {
         const note = document.createElement('small');
         note.append('Revised agency total. The eight local area codes have no verified boundaries. ',

@@ -60,13 +60,16 @@ describe('2025 Illinois traffic review data', () => {
       totals.set(owner, (totals.get(owner) ?? 0) + Number(n));
     }
     for (const a of agencies) {
-      expect(Object.keys(a).sort()).toEqual(['code','name','page','rows']);
+      expect(Object.keys(a).sort()).toEqual(['code','incomplete','name','page','rows','summaryPage']);
       expect(a.rows).toBe(totals.get(a.code));
       expect(a.page >= 1427 && a.page <= 1463).toBe(true);
+      expect(a.summaryPage >= 6 && a.summaryPage < 1427).toBe(true);
     }
     expect(agencies.reduce((n,a) => n + a.rows, 0)).toBe(directory.rows);
     expect(directory.rows).toBe(2062325);
-    expect(matchingAgencies(agencies, 'bluff  LAKE')).toEqual([{name:'LAKE BLUFF POLICE', code:'13478', rows:1517, page:1444}]);
+    expect(agencies.filter(a => a.incomplete)).toHaveLength(23);
+    expect(new Set(agencies.map(a => a.summaryPage)).size).toBe(775);
+    expect(matchingAgencies(agencies, 'bluff  LAKE')).toEqual([{name:'LAKE BLUFF POLICE', code:'13478', rows:1517, page:1444, summaryPage:687, incomplete:false}]);
     expect(matchingAgencies(agencies, '13194')[0].rows).toBe(224851);
     expect(matchingAgencies(agencies, 'no matching agency')).toEqual([]);
   });

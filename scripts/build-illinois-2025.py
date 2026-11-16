@@ -55,13 +55,30 @@ def agency_directory(report):
                 if not name_lines or code in agencies:
                     raise ValueError(f'Ambiguous reporting agency {code}')
                 agencies[code] = dict(code=code, name=' '.join(name_lines), page=page, rows=statewide[code])
+        by_name = {agency['name']: agency for agency in agencies.values()}
+        if len(by_name) != len(agencies):
+            raise ValueError('Ambiguous agency names in the IDOT crosswalk')
+        for page in range(6, 1427):
+            text = document[page - 1].get_text()
+            title = re.search(r'Summary of Traffic Stops for 2025\s*-\s*([^\n]+)', text)
+            total = re.search(r'Total stops:\s*([\d,]+)\.', text)
+            if not title or not total:
+                continue
+            heading = title[1].split('Population Benchmark:')[0].strip()
+            name, marker, _ = heading.partition(' - INCOMPLETE STOPS DATA SUBMITTED')
+            agency = by_name.get(name)
+            if agency is None:
+                continue  # Statewide and district-level panels also occur in the report.
+            if 'summaryPage' in agency or agency['rows'] != int(total[1].replace(',', '')):
+                raise ValueError(f'Ambiguous or conflicting published total for {name}')
+            agency.update(summaryPage=page, incomplete=bool(marker))
         for page, code in [(6, None), (204, '13194'), (687, '13478')]:
             n = statewide[code] if code else sum(statewide.values())
             entry = document[page - 1].get_text()
             if f'Total stops: {n:,}.' not in entry or (code and agencies[code]['name'] not in entry):
                 raise ValueError(f'Published agency total mismatch on PDF page {page}')
-    if set(agencies) != set(statewide):
-        raise ValueError('Unresolved reporting agency')
+    if set(agencies) != set(statewide) or any('summaryPage' not in a for a in agencies.values()):
+        raise ValueError('Unresolved reporting agency or published total')
     return dict(year=2025, rows=sum(statewide.values()), report=REPORT_URL,
                 agencies=sorted(agencies.values(), key=lambda item: (item['name'], item['code'])))
 
