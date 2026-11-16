@@ -1,3 +1,4 @@
+import { mountIllinoisDirectory } from '../map/illinoisAgencyDirectory';
 import { mountMapSettings, savedMap3D } from '../settings/mapSettings';
 import { mountTheme, readThemeChoice } from '../settings/theme';
 import { findDestination, drivingRoutes, type PreviewRoute, type Coordinate, type Destination } from '../navigation/mapboxPreview';
@@ -735,6 +736,7 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
   apply(); if (tcSet.show) deferredMapLayers.push(() => { if(tcSet.show) void show(true); });
 }
 // Historical Stop History preview and Pro presentation. Purchases must not be enabled without verified Play Billing.
+mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 const HEAT_FILTER_KEY = 'pr.stopheat.filter';
 const PRO_MONTHLY_USD = 1.99;

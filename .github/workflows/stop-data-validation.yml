@@ -2,7 +2,7 @@ name: Stop data validation
 on:
   pull_request:
     branches: [main]
-    paths: ['scripts/**', 'src/**', 'docs/urbana*', 'docs/illinois*', 'docs/data/illinois-2025/**', 'package*.json', '.github/workflows/stop-data-validation.yml']
+    paths: ['scripts/**', 'src/**', 'public/data/stop-heat/**', 'public/data/illinois-2025/**', 'docs/urbana*', 'docs/illinois*', 'docs/data/illinois-2025/**', 'package*.json', '.github/workflows/stop-data-validation.yml']
 permissions: { contents: read }
 jobs:
   validate:

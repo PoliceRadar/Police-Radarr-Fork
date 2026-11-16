@@ -1,6 +1,6 @@
 # Illinois historical stop coverage — expansion work (2026-11-13)
 
-2026-11-16 upload update: all fourteen 2025 statewide, revised Lake Bluff and CPD traffic files have a [counts-only ingestion audit and staged aggregates](illinois-2025-traffic-audit.md). They add **zero mapped records** pending verified geography, source-year ownership and release conditions. In particular, 1,100 revised Lake Bluff rows match statewide records; never append both extracts to the map.
+The 2025 Illinois upload adds **222,967 Chicago records across 274 beats**. A separate agency directory holds **2,062,325 reported records across 775 agencies**, including **1,517 revised Lake Bluff records**. The map excludes 1,884 outside-Chicago records and adds no statewide or Lake Bluff street locations. [Data audit and geographic sources](illinois-2025-traffic-audit.md)
 
 Tracker: [#55](https://github.com/missionaryj/patrol-radar/issues/55). Parent draft: [PR #49](https://github.com/missionaryj/patrol-radar/pull/49).
 
