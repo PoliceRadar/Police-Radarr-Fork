@@ -7,6 +7,7 @@ import {
   loadProEntitlement,
   qualifiesByInstallDate,
   resolveEntitlement,
+  trafficCameraAlertUnlocked,
   trafficCamerasUnlocked,
   type GrantStore,
 } from './pro';
@@ -134,6 +135,16 @@ describe('install-date grandfathering', () => {
     expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true }))).toBe(false);
   });
 
+  it('keeps school-zone and work-zone alerts free without Pro, including on web', () => {
+    const locked = resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true });
+    expect(trafficCameraAlertUnlocked(locked, 'school_zone')).toBe(true);
+    expect(trafficCameraAlertUnlocked(locked, 'work_zone')).toBe(true);
+    expect(trafficCameraAlertUnlocked(locked, 'speed')).toBe(false);
+    expect(trafficCameraAlertUnlocked(locked, 'red_light')).toBe(false);
+    expect(trafficCameraAlertUnlocked(locked, 'monitor')).toBe(false);
+    expect(trafficCameraAlertUnlocked({ pro: true }, 'speed')).toBe(true);
+  });
+
   it('lists traffic cameras in Pro copy and locks them in Settings', () => {
     const html = readFileSync(new URL('../../v2/index.html', import.meta.url), 'utf8');
     const main = readFileSync(new URL('../v2/main.ts', import.meta.url), 'utf8');
@@ -141,12 +152,20 @@ describe('install-date grandfathering', () => {
     expect(html).toMatch(/id="open-tc"[^>]*>[\s\S]*Traffic cameras[\s\S]*pro-mark/);
     expect(html).toContain('id="tc-pro-offer"');
     expect(html).toContain('id="tc-upgrade"');
-    expect(html).toContain('Unlock traffic-camera map pins and upcoming-camera alerts');
-    expect(html).toContain('Explore the free Stop History preview, traffic cameras, and planned features');
-    expect(html).toContain('Unlock traffic-camera map pins and alerts, full-strength heatmap shading');
+    expect(html).toContain('Unlock traffic-camera map pins and upcoming-camera alerts for speed, red-light and traffic-monitoring cameras');
+    expect(html).toContain('School-zone and work-zone alerts are included for everyone');
+    expect(html).toContain('Explore the free Stop History preview, school- and work-zone alerts, and planned features');
+    expect(html).toContain('Unlock traffic-camera map pins and speed, red-light and monitoring alerts');
+    expect(html).toContain('School-zone and work-zone alerts stay free');
+    expect(html).toContain('id="tc-alerts-on"');
+    expect(html).toContain('id="tc-alert-school_zone"');
+    expect(html).toContain('id="tc-alert-work_zone"');
     expect(main).toContain('trafficCamerasUnlocked');
+    expect(main).toContain('isFreeTrafficCameraAlertType');
     expect(main).toContain('trafficCamerasPro');
     expect(main).toContain("mountLegend($('map-legend'), localStorage, { trafficCameras: false })");
+    expect(main).toContain("if (!document.body.dataset.experience || tcBusy || !tcSet.alerts)");
+    expect(main).not.toContain("if (!trafficCamerasUnlocked({ pro: trafficCamerasPro }) || !document.body.dataset.experience");
     // Flock stays free: the mapped-Flock switch is not behind the Pro gate.
     const flockBlock = main.slice(main.indexOf('// Pre-loaded Flock cameras'), main.indexOf('// Traffic enforcement cameras'));
     expect(flockBlock).toContain("getElementById('flockmap')");

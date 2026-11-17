@@ -4,6 +4,7 @@
  */
 import type { TcPoint, TcType } from '../map/trafficCamLayer';
 import type { TravelMode } from '../settings/travelMode';
+import { isFreeTrafficCameraAlertType, trafficCameraAlertUnlocked } from '../entitlement/pro';
 export type AlertStyle = 'sound' | 'vibrate' | 'silent';
 export type AlertDistance = 'auto' | 150 | 300 | 500;
 export interface TcSettings {
@@ -35,8 +36,13 @@ export function loadTcSettings(s: Pick<Storage, 'getItem'> | undefined = globalT
   return d;
 }
 export const saveTcSettings = (st: TcSettings, s: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage) => { try { s?.setItem(TC_SETTINGS_KEY, JSON.stringify(st)); s?.setItem('pr.trafficcams', st.show ? '1' : '0'); } catch { /* ignore */ } };
-/** A type alerts only when alerts are on, the layer and that type are shown, and the type is ticked under "Alert me for". */
-export const alertsFor = (st: TcSettings, t: TcType) => st.alerts && st.show && st.types[t] && st.alertTypes[t];
+/** School-zone and work-zone alerts are free and do not require the map layer or Pro.
+ *  Paid types (speed, red-light, monitoring) also need Pro, the layer shown, and that type visible on the map. */
+export const alertsFor = (st: TcSettings, t: TcType, pro = false) => {
+  if (!st.alerts || !st.alertTypes[t] || !trafficCameraAlertUnlocked({ pro }, t)) return false;
+  if (isFreeTrafficCameraAlertType(t)) return true;
+  return st.show && st.types[t];
+};
 /** Auto: on foot 100 m; in a car ~20 s of travel at current speed, 250-600 m (400 m when speed is unknown). */
 export function alertDistanceM(st: TcSettings, mode: TravelMode, speedMps?: number | null): number {
   if (st.distance !== 'auto') return st.distance;
@@ -73,13 +79,14 @@ export class TrafficAlerter {
     if (!this.prev || distM(this.prev, f) >= 8) this.prev = f;
     return this.hdg;
   }
-  /** Nearest eligible camera within range that hasn't alerted in the last 10 min, or null. Requires Pro. */
+  /** Nearest eligible camera within range that hasn't alerted in the last 10 min, or null.
+   *  School-zone and work-zone alerts do not require Pro or the map layer; other types do. */
   check(f: Fix, cams: TcPoint[], st: TcSettings, mode: TravelMode, pro: boolean): TcAlert | null {
     const h = this.heading(f);
-    if (!pro || !st.alerts || !st.show) return null;
+    if (!st.alerts) return null;
     const max = alertDistanceM(st, mode, f.speed); let best: TcAlert | null = null;
     for (const c of cams) {
-      if (!alertsFor(st, c.type)) continue;
+      if (!alertsFor(st, c.type, pro)) continue;
       const d = distM(f, c); if (d > max) continue;
       if (st.aheadOnly && h !== undefined && !isAhead(f, h, c)) continue;
       const k = `${c.lat.toFixed(4)},${c.lng.toFixed(4)},${c.type}`, last = this.seen.get(k);

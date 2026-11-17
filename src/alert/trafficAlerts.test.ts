@@ -32,7 +32,7 @@ describe('traffic camera alerts', () => {
     expect(new TrafficAlerter().check(f, cams, S({ show: false }), 'car', true)).toBeNull();
     expect(new TrafficAlerter().check(f, cams, S({ types: { ...DEFAULT_TC_SETTINGS.types, red_light: false } }), 'car', true)).toBeNull();
     expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'monitor')], S(), 'car', true)).toBeNull();
-    expect(alertsFor(S(), 'speed')).toBe(true);
+    expect(alertsFor(S(), 'speed', true)).toBe(true);
   });
   it('ahead check uses camera direction when known', () => {
     expect(isAhead(me, 0, cam(north(200), me.lng, 'speed', 0))).toBe(true);
@@ -45,9 +45,18 @@ describe('traffic camera alerts', () => {
     const h = a.heading({ lat: north(30), lng: me.lng, t: 2000 }); expect(h).toBeCloseTo(0, 0);
     expect(roundDist(248)).toBe('250 m'); expect(roundDist(42)).toBe('40 m');
   });
-  it('non-Pro and web (pro=false) never alert, even with alerts and the layer on', () => {
-    const cams = [cam(north(100), me.lng)]; const f = { ...me, heading: 0, speed: 10, t: 0 };
-    expect(new TrafficAlerter().check(f, cams, S(), 'car', false)).toBeNull();
-    expect(new TrafficAlerter().check(f, cams, S(), 'car', true)).not.toBeNull();
+  it('non-Pro and web keep school-zone and work-zone alerts free, and lock paid types', () => {
+    const f = { ...me, heading: 0, speed: 10, t: 0 };
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'red_light')], S(), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'speed')], S(), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'monitor')], S({ alertTypes: { ...DEFAULT_TC_SETTINGS.alertTypes, monitor: true } }), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'school_zone')], S(), 'car', false)).not.toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'work_zone')], S(), 'car', false)).not.toBeNull();
+    // Free alerts still work when the Pro-locked map layer is hidden.
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'school_zone')], S({ show: false }), 'car', false)).not.toBeNull();
+    expect(alertsFor(S({ show: false }), 'school_zone', false)).toBe(true);
+    expect(alertsFor(S({ show: false }), 'work_zone', false)).toBe(true);
+    expect(alertsFor(S(), 'speed', false)).toBe(false);
+    expect(alertsFor(S(), 'red_light', true)).toBe(true);
   });
 });
