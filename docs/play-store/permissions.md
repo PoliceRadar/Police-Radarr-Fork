@@ -17,5 +17,5 @@ POST_NOTIFICATIONS (foreground-service notification), WAKE_LOCK, INTERNET (map t
 Removed for Play: REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (restricted permission); the in-app button now opens the system battery-optimization list instead.
 
 ## Other App content items
-- Ads: No ads. Government app: No. Financial features: None. Health: No. News: No.
-- Account deletion: no accounts.
+- Ads: No ads. Government app: No. Financial features: standard Google Play in-app subscription only (review current Play form; no lending, banking, investing or transfers). Health: No. News: No.
+- Account deletion: an anonymous Supabase account is used for City Chat and Pro purchase verification; explain deletion and retained purchase records in privacy policy.
