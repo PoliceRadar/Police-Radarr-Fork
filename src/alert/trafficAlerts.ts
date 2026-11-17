@@ -73,10 +73,10 @@ export class TrafficAlerter {
     if (!this.prev || distM(this.prev, f) >= 8) this.prev = f;
     return this.hdg;
   }
-  /** Nearest eligible camera within range that hasn't alerted in the last 10 min, or null. */
-  check(f: Fix, cams: TcPoint[], st: TcSettings, mode: TravelMode): TcAlert | null {
+  /** Nearest eligible camera within range that hasn't alerted in the last 10 min, or null. Requires Pro. */
+  check(f: Fix, cams: TcPoint[], st: TcSettings, mode: TravelMode, pro: boolean): TcAlert | null {
     const h = this.heading(f);
-    if (!st.alerts || !st.show) return null;
+    if (!pro || !st.alerts || !st.show) return null;
     const max = alertDistanceM(st, mode, f.speed); let best: TcAlert | null = null;
     for (const c of cams) {
       if (!alertsFor(st, c.type)) continue;

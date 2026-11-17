@@ -102,3 +102,13 @@ export async function readNativeFirstInstallTime(plugin: { firstInstallTime?: ()
   const result = await plugin.firstInstallTime();
   return result?.firstInstallTime ?? null;
 }
+
+/**
+ * Traffic-camera map pins, upcoming-camera alerts, and the traffic-camera
+ * settings controls require Pro. Founding testers already have `pro: true`.
+ * The web app stays locked unless a future verified purchase is passed in.
+ * Flock cameras, police detection, and BLE scanning are not gated here.
+ */
+export function trafficCamerasUnlocked(entitlement: Pick<ProEntitlement, 'pro'>): boolean {
+  return entitlement.pro === true;
+}

@@ -7,6 +7,7 @@ import {
   loadProEntitlement,
   qualifiesByInstallDate,
   resolveEntitlement,
+  trafficCamerasUnlocked,
   type GrantStore,
 } from './pro';
 
@@ -114,7 +115,8 @@ describe('install-date grandfathering', () => {
     const main = readFileSync(new URL('../v2/main.ts', import.meta.url), 'utf8');
     expect(html).toContain('id="illinois-agencies"');
     expect(main).toContain('mountIllinoisDirectory(');
-    expect(main.indexOf('mountIllinoisDirectory(')).toBeLessThan(main.indexOf('let hasVerifiedPro'));
+    expect(main).not.toMatch(/if\s*\(\s*hasVerifiedPro\s*\)[\s\S]{0,240}mountIllinoisDirectory/);
+    expect(main).not.toMatch(/if\s*\(\s*trafficCamerasPro\s*\)[\s\S]{0,240}mountIllinoisDirectory/);
   });
 
   it('leaves purchases locked unless a caller supplies a verified purchase', () => {
@@ -122,5 +124,46 @@ describe('install-date grandfathering', () => {
     expect(resolveEntitlement({
       platform: 'web', firstInstallTimeMs: null, persistedGrant: false, verifiedPurchase: true,
     })).toEqual({ pro: true, foundingTester: false });
+  });
+
+  it('unlocks traffic cameras only when Pro is granted', () => {
+    expect(trafficCamerasUnlocked({ pro: true })).toBe(true);
+    expect(trafficCamerasUnlocked({ pro: false })).toBe(false);
+    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false }))).toBe(true);
+    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false }))).toBe(false);
+    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true }))).toBe(false);
+  });
+
+  it('lists traffic cameras in Pro copy and locks them in Settings', () => {
+    const html = readFileSync(new URL('../../v2/index.html', import.meta.url), 'utf8');
+    const main = readFileSync(new URL('../v2/main.ts', import.meta.url), 'utf8');
+    expect(html).toContain('id="open-tc"');
+    expect(html).toMatch(/id="open-tc"[^>]*>[\s\S]*Traffic cameras[\s\S]*pro-mark/);
+    expect(html).toContain('id="tc-pro-offer"');
+    expect(html).toContain('id="tc-upgrade"');
+    expect(html).toContain('Unlock traffic-camera map pins and upcoming-camera alerts');
+    expect(html).toContain('Explore the free Stop History preview, traffic cameras, and planned features');
+    expect(html).toContain('Unlock traffic-camera map pins and alerts, full-strength heatmap shading');
+    expect(main).toContain('trafficCamerasUnlocked');
+    expect(main).toContain('trafficCamerasPro');
+    expect(main).toContain("mountLegend($('map-legend'), localStorage, { trafficCameras: false })");
+    // Flock stays free: the mapped-Flock switch is not behind the Pro gate.
+    const flockBlock = main.slice(main.indexOf('// Pre-loaded Flock cameras'), main.indexOf('// Traffic enforcement cameras'));
+    expect(flockBlock).toContain("getElementById('flockmap')");
+    expect(flockBlock).not.toContain('trafficCamerasUnlocked');
+    expect(flockBlock).not.toContain('hasVerifiedPro');
+    expect(flockBlock).not.toContain('trafficCamerasPro');
+  });
+
+  it('does not gate native police or BLE alerts on the traffic-camera entitlement', () => {
+    const scan = readFileSync(new URL('../../android/app/src/main/java/io/github/missionaryj/patrolradar/ScanService.java', import.meta.url), 'utf8');
+    const notes = readFileSync(new URL('../../android/app/src/main/java/io/github/missionaryj/patrolradar/PoliceAlertNotifications.java', import.meta.url), 'utf8');
+    const matcher = readFileSync(new URL('../../android/app/src/main/java/io/github/missionaryj/patrolradar/NativeAlertMatcher.java', import.meta.url), 'utf8');
+    for (const src of [scan, notes, matcher]) {
+      expect(src).not.toContain('trafficCameras');
+      expect(src).not.toMatch(/upcoming-camera|traffic.?cam/i);
+    }
+    // "Fixed camera ping" is the soft police-notification channel name, not a traffic-camera alert.
+    expect(notes).toContain('Fixed camera ping');
   });
 });
