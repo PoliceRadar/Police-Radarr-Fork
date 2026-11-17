@@ -15,7 +15,7 @@ import { RASTER_2D, PITCH_3D } from './palette';
 import { Map3D, type Pin3D } from './map3d';
 import { PatrolMotion, headingStep, patrolZoom } from './patrolDriving';
 import { type TcIndex, type TcRow, type TcType, TC_ATTRIBUTION, TC_MIN_ZOOM, TC_META, tcInBounds, tcIcon, tcPopup } from './trafficCamLayer';
-import { type HeatCell, type HeatFilter, type StopHeatIndex, HEAT_CELL_CAP, HEAT_GRID_MIN_ZOOM, OPEN_FILTER, STOP_HEAT_ATTRIBUTION, countBuckets, heatPaint, heatTilesFor } from './stopHeatLayer';
+import { type HeatCell, type HeatFilter, type StopHeatIndex, HEAT_CELL_CAP, HEAT_GRID_MIN_ZOOM, OPEN_FILTER, STOP_HEAT_ATTRIBUTION, beatFilesFor, cellTotals, countBuckets, evictKeys, heatPaint, heatTilesFor } from './stopHeatLayer';
 import { type FlockCollection, type FlockIndex, FLOCK_ATTRIBUTION, FLOCK_MIN_ZOOM, flockInBounds, tilesFor } from './flockLayer';
 
 /** Hidden Leaflet only needs periodic position sync when MapLibre is the visible renderer. */
@@ -25,6 +25,7 @@ export function shouldSyncLeaflet(active3D: boolean, now: number, last: number):
 
 /** Cap on live dots drawn (police matches first, then strongest RSSI). See scripts/stress/map.html. */
 export const MAX_LIVE_DOTS = 150;
+type HeatBeatFile = { features?: { bbox?: number[]; geometry: { type: string; coordinates: number[][][] | number[][][][] }; properties: Record<string, any> }[] };
 export interface MapViewOptions { dark?: boolean; legend?: boolean; layersControl?: boolean; zoomControl?: boolean; waitForLocation?: boolean; initial3D?: boolean; }
 export class MapView {
   private map: L.Map;
@@ -121,7 +122,9 @@ export class MapView {
   private flockRenderer = L.canvas({ padding: 0.3 });
   private tcIdx?: TcIndex; private tcBase = ''; private tcTiles = new Map<string, Promise<TcRow[]>>(); private tcOn = false; private tcLoading?: Promise<void>; private tcDraw = 0; private tcTimer?: number; private tcTypes?: Set<TcType>;
   private heatIdx?: StopHeatIndex; private heatBase = ''; private heatOn = false; private heatPreview = true; private heatFilter: HeatFilter = { ...OPEN_FILTER };
-  private heatTiles = new Map<string, Promise<HeatCell[] | undefined>>(); private heatBeats: { features?: { bbox?: number[]; geometry: { type: string; coordinates: number[][][] | number[][][][] }; properties: Record<string, any> }[] }[] = [];
+  private heatTiles = new Map<string, Promise<HeatCell[] | undefined>>();
+  /** Beat files are fetched only when their recorded bounds touch the view, then kept (all of them total ~0.5 MB). */
+  private heatBeats = new Map<string, Promise<HeatBeatFile>>();
   private heatLoading?: Promise<void>; private heatDraw = 0; private heatTimer?: number; private heatRenderer!: L.Renderer;
   /** Live dots/rings on one canvas: hundreds of SVG paths rebuilt per refresh janked the map (see scripts/stress). */
   private liveRenderer = L.canvas({ padding: 0.3 });
@@ -400,21 +403,31 @@ export class MapView {
   private async loadHeat(baseUrl: string) {
     if (this.heatLoading && this.heatBase === baseUrl) return this.heatLoading;
     if (this.heatIdx && this.heatBase === baseUrl) return;
-    this.heatBase = baseUrl; this.heatTiles.clear();
+    this.heatBase = baseUrl; this.heatTiles.clear(); this.heatBeats.clear();
     this.heatLoading = fetch(`${baseUrl}index.json`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(async (i: StopHeatIndex) => {
-      const files = await Promise.all((i.beatFiles ?? []).map(async f => {
-        const response = await fetch(baseUrl + f);
-        if (!response.ok) throw new Error(`Historical boundaries unavailable (HTTP ${response.status})`);
-        return response.json();
-      }));
-      this.heatBeats = files;
+      // Only the files under the current view; the rest load when the map moves there.
+      await Promise.all(beatFilesFor(i, this.heatViewBox()).map(f => this.heatBeat(f)));
       this.heatIdx = i;
     });
     try { await this.heatLoading; } catch (e) { this.heatLoading = undefined; this.heatIdx = undefined; throw e; }
   }
+  private heatViewBox() {
+    const m = (this.m3.active && this.m3.bounds()) || this.map.getBounds();
+    const b = L.latLngBounds([m.getSouth(), m.getWest()], [m.getNorth(), m.getEast()]).pad(0.15);
+    return { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() };
+  }
+  private heatBeat(f: string) {
+    let p = this.heatBeats.get(f);
+    if (!p) {
+      p = fetch(this.heatBase + f).then(r => { if (!r.ok) throw new Error(`Historical boundaries unavailable (HTTP ${r.status})`); return r.json(); });
+      p.catch(() => this.heatBeats.delete(f)); this.heatBeats.set(f, p);
+    }
+    return p;
+  }
   private heatTile(k: string) {
     let p = this.heatTiles.get(k);
-    if (!p) { p = fetch(`${this.heatBase}tiles/${k}.json`).then(r => r.ok ? r.json() : undefined); p.catch(() => this.heatTiles.delete(k)); this.heatTiles.set(k, p); }
+    if (p) { this.heatTiles.delete(k); this.heatTiles.set(k, p); return p; } // refresh LRU order
+    p = fetch(`${this.heatBase}tiles/${k}.json`).then(r => r.ok ? r.json() : undefined); p.catch(() => this.heatTiles.delete(k)); this.heatTiles.set(k, p);
     return p;
   }
   private scheduleHeat() {
@@ -430,16 +443,23 @@ export class MapView {
     const f = this.heatFilter;
     const paint = (n: number) => { const p = heatPaint(n); return { color: p.stroke, weight: 1, opacity: 0.9, fillColor: p.stroke, fillOpacity: p.fillOpacity * (this.heatPreview ? 0.4 : 1) }; };
     const features: GeoJSON.Feature[] = [];
+    const counts = new Map<GeoJSON.Feature, number>();
     const bounds = (this.m3.active && this.m3.bounds()) || this.map.getBounds();
-    for (const fc of this.heatBeats) for (const feat of fc.features ?? []) {
+    const view = { south: bounds.getSouth(), west: bounds.getWest(), north: bounds.getNorth(), east: bounds.getEast() };
+    const beatFiles = await Promise.all(beatFilesFor(idx, view).map(file => this.heatBeat(file).catch(() => undefined)));
+    if (gen !== this.heatDraw) return;
+    for (const fc of beatFiles) if (fc) for (const feat of fc.features ?? []) {
       const b = feat.bbox;
-      if (b && (b[2] < bounds.getWest() || b[0] > bounds.getEast() || b[3] < bounds.getSouth() || b[1] > bounds.getNorth())) continue;
-      if (!countBuckets(feat.properties.b ?? [], feat.properties.o, f, idx.yearBase).n) continue;
-      features.push({ type: 'Feature', geometry: feat.geometry as GeoJSON.Geometry, properties: feat.properties });
+      if (b && (b[2] < view.west || b[0] > view.east || b[3] < view.south || b[1] > view.north)) continue;
+      // Only the total is drawn, so skip the outcome table (it made each count ~10x slower).
+      const n = countBuckets(feat.properties.b ?? [], undefined, f, idx.yearBase).n;
+      if (!n) continue;
+      const out: GeoJSON.Feature = { type: 'Feature', geometry: feat.geometry as GeoJSON.Geometry, properties: feat.properties };
+      counts.set(out, n); features.push(out);
     }
     const group = L.geoJSON({ type: 'FeatureCollection', features } as GeoJSON.GeoJSON, {
       pane: 'heatPane', renderer: this.heatRenderer, interactive: false,
-      style: (feat) => paint(countBuckets(feat?.properties?.b ?? [], feat?.properties?.o, this.heatFilter, idx.yearBase).n),
+      style: (feat) => paint((feat && counts.get(feat)) ?? countBuckets(feat?.properties?.b ?? [], undefined, f, idx.yearBase).n),
       onEachFeature: (_feat, layer) => {
         const path = layer as L.Path; path.options.renderer = this.heatRenderer; path.options.pane = 'heatPane';
         path.options.interactive = false;
@@ -452,18 +472,22 @@ export class MapView {
       const bb = { south: bnds.getSouth(), west: bnds.getWest(), north: bnds.getNorth(), east: bnds.getEast() };
       const keys = heatTilesFor(idx, bb);
       const tiles = await Promise.all(keys.map(k => this.heatTile(k)));
+      for (const k of evictKeys(this.heatTiles.keys(), new Set(keys), k => idx.tiles[k] ?? 0)) this.heatTiles.delete(k);
       if (gen !== this.heatDraw) return;
       const picked: { n: number; layer: L.Layer; feature: GeoJSON.Feature }[] = [];
-      for (const t of tiles) if (t) for (const cell of t) {
-        const [lat, lng, , buckets, o] = cell;
-        if (lat < bb.south || lat > bb.north || lng < bb.west || lng > bb.east) continue;
-        const count = countBuckets(buckets, o, this.heatFilter, idx.yearBase);
-        if (!count.n) continue;
-        const dLat = idx.gridM / 111_320, dLng = idx.gridM / (111_320 * Math.cos((lat * Math.PI) / 180));
-        const rect = L.rectangle([[lat - dLat / 2, lng - dLng / 2], [lat + dLat / 2, lng + dLng / 2]], { ...paint(count.n), renderer: this.heatRenderer, pane: 'heatPane', interactive: false });
-        const pnt = heatPaint(count.n);
-        const ring: [number, number][] = [[lng - dLng / 2, lat - dLat / 2], [lng + dLng / 2, lat - dLat / 2], [lng + dLng / 2, lat + dLat / 2], [lng - dLng / 2, lat + dLat / 2], [lng - dLng / 2, lat - dLat / 2]];
-        picked.push({ n: count.n, layer: rect, feature: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: { color: pnt.stroke, opacity: pnt.fillOpacity * (this.heatPreview ? 0.4 : 1) } } });
+      for (const t of tiles) if (t) {
+        const totals = cellTotals(t, f, idx.yearBase);
+        for (let ci = 0; ci < t.length; ci++) {
+          const [lat, lng] = t[ci];
+          if (lat < bb.south || lat > bb.north || lng < bb.west || lng > bb.east) continue;
+          const n = totals[ci];
+          if (!n) continue;
+          const dLat = idx.gridM / 111_320, dLng = idx.gridM / (111_320 * Math.cos((lat * Math.PI) / 180));
+          const rect = L.rectangle([[lat - dLat / 2, lng - dLng / 2], [lat + dLat / 2, lng + dLng / 2]], { ...paint(n), renderer: this.heatRenderer, pane: 'heatPane', interactive: false });
+          const pnt = heatPaint(n);
+          const ring: [number, number][] = [[lng - dLng / 2, lat - dLat / 2], [lng + dLng / 2, lat - dLat / 2], [lng + dLng / 2, lat + dLat / 2], [lng - dLng / 2, lat + dLat / 2], [lng - dLng / 2, lat - dLat / 2]];
+          picked.push({ n, layer: rect, feature: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: { color: pnt.stroke, opacity: pnt.fillOpacity * (this.heatPreview ? 0.4 : 1) } } });
+        }
       }
       picked.sort((a, c) => c.n - a.n);
       const visible = picked.slice(0, HEAT_CELL_CAP);
@@ -474,9 +498,7 @@ export class MapView {
     this.heatLayer.clearLayers(); group.addTo(this.heatLayer); for (const l of cells) l.addTo(this.heatLayer);
     this.keepHeatUnderMarkers();
     const beats3d: GeoJSON.Feature[] = features.map(f => {
-      const props = f.properties ?? {};
-      const count = countBuckets(props.b ?? [], props.o, this.heatFilter, idx.yearBase);
-      const p = heatPaint(count.n);
+      const p = heatPaint(counts.get(f) ?? 0);
       return { type: 'Feature', geometry: f.geometry, properties: { color: p.stroke, opacity: p.fillOpacity * (this.heatPreview ? 0.4 : 1) } };
     });
     this.m3.setHeat({ type: 'FeatureCollection', features: [...beats3d, ...grid3d] });

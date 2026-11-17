@@ -183,7 +183,9 @@ public class ScanService extends Service {
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("Patrol Radar is scanning")
             .setContentText("Passive Bluetooth scan. Open the app and tap Stop to end.")
-            .setOngoing(true).setContentIntent(pi).setOnlyAlertOnce(true).setSilent(true).setCategory(NotificationCompat.CATEGORY_SERVICE).setPriority(NotificationCompat.PRIORITY_DEFAULT).build();
+            .setOngoing(true).setContentIntent(pi).setOnlyAlertOnce(true).setSilent(true).setCategory(NotificationCompat.CATEGORY_SERVICE).setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // Android 12+ may hold a new foreground-service notification back for ~10 s. Show it at once so a running scan is never invisible.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE).build();
         int type = 0;
         if (Build.VERSION.SDK_INT >= 29) {
             type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE;
