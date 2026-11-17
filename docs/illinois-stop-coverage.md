@@ -1,5 +1,7 @@
 # Illinois historical stop coverage — expansion work (2026-11-13)
 
+The 2025 Illinois upload adds **222,967 Chicago records across 274 beats**. A separate agency directory holds **2,062,325 reported records across 775 agencies**, including **1,517 revised Lake Bluff records**. The map excludes 1,884 outside-Chicago records and adds no statewide or Lake Bluff street locations. [Data audit and geographic sources](illinois-2025-traffic-audit.md)
+
 Tracker: [#55](https://github.com/missionaryj/patrol-radar/issues/55). Parent draft: [PR #49](https://github.com/missionaryj/patrol-radar/pull/49).
 
 **Status: Chicago and Urbana are in the 2026-11-14 audited snapshot, with the limits below.** Do not use the older `main` heat-map totals as the audited baseline. `main` mapped 2,005,974 Chicago OPP rows with no encounter dedupe, and 4,739 Urbana investigatory-sheet rows onto Champaign beats. Both of those treatments stay retired.

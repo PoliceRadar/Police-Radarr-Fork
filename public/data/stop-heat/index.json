@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-14T05:29:53.064Z",
+ "generated": "2026-11-16T23:38:32.418Z",
  "gridM": 150,
  "tileDeg": 0.25,
  "yearBase": 1990,
@@ -93,8 +93,8 @@
   "investigatory",
   "other"
  ],
- "disclaimer": "Historical records only; coverage is uneven and regional. Coordinates are publisher supplied, sometimes anonymized. Chicago collapses identical public stop rows and can still contain duplicate encounters. Urbana is a citywide total: the stops are not located inside the city on this map. Counts use event IDs where available. Shading is visual only, not current police activity or a prediction.",
- "attribution": "Stanford Open Policing Project (ODC-BY), including Chicago vehicle stops; Cincinnati Police open data; NYPD Vehicle Stop Reports; dataMontgomery; City of Urbana stop-level traffic stops via data.illinois.gov; U.S. Census Bureau 2020 geography and population.",
+ "disclaimer": "Historical records only; coverage is uneven and regional. Coordinates are publisher supplied, sometimes anonymized. Stanford’s historical Chicago series collapses identical public stop rows and can still contain duplicate encounters. Urbana is a citywide total: the stops are not located inside the city on this map. Counts use event IDs where available. Shading is visual only, not current police activity or a prediction. Chicago 2025 shows reported counts by police beat. Illinois agency totals include Chicago and do not add to the map total.",
+ "attribution": "Stanford Open Policing Project (ODC-BY), including Chicago vehicle stops; Cincinnati Police open data; NYPD Vehicle Stop Reports; dataMontgomery; City of Urbana stop-level traffic stops via data.illinois.gov; U.S. Census Bureau 2020 geography and population. Illinois Department of Transportation, 2025 Traffic Stop Study. Chicago police beat boundaries from the City of Chicago.",
  "sources": [
   {
    "id": "opp_mt",
@@ -908,9 +908,57 @@
     "url": "https://tigerweb.geo.census.gov/arcgis/rest/services/Census2020/tigerWMS_Census2020/MapServer/26/query?where=GEOID%3D%271777005%27&outFields=GEOID%2CNAME%2CPOP100%2CAREALAND%2CAREAWATER&returnGeometry=true&outSR=4326&f=geojson",
     "sha256": "d616da72cb14752a13178c8cb4c8f321df4b7b82c93f877b030115d2db301927"
    }
+  },
+  {
+   "id": "cpd_2025",
+   "name": "Chicago Police · IDOT 2025 traffic stop study",
+   "url": "https://idot.illinois.gov/content/dam/soi/en/web/idot/documents/transportation-system/reports/safety/traffic-stop-studies/2025-traffic-stops-part-ii.pdf#page=204",
+   "license": "Aggregate counts from IDOT traffic records. Boundaries credited to the City of Chicago.",
+   "license_url": "https://www.chicago.gov/city/en/narr/foia/data_disclaimer.html",
+   "disclaimer": "This site provides applications using data that has been modified for use from its original source, www.cityofchicago.org, the official website of the City of Chicago. The City of Chicago makes no claims as to the content, accuracy, timeliness, or completeness of any of the data provided at this site. The data provided at this site is subject to change at any time. It is understood that the data provided at this site is being used at one's own risk.",
+   "fetched": "2026-11-16",
+   "last_updated": null,
+   "stops": 222967,
+   "mapped": 222967,
+   "unmapped": 1884,
+   "audit": {
+    "seen": 224851,
+    "accepted": 222967,
+    "rejected": 1884,
+    "duplicate_rows": 0,
+    "candidate_repeated_rows": 183,
+    "time_range": [
+     "2025-01-01",
+     "2025-12-31"
+    ]
+   },
+   "precision": "Reported beat of stop on the city’s published police beat boundaries.",
+   "boundary": {
+    "url": "https://data.cityofchicago.org/resource/n9it-hstw.geojson?$limit=1000",
+    "sha256": "775a45ea97fd6ef5f95d6b299bec0732556bb6d6ed8d805338ee298387acd468"
+   },
+   "note": "274 beats. The agency total includes 1,884 outside-city records (code 3100) excluded from shading. Counts retain 183 possible repeat rows because the extract has no unique encounter identifier."
   }
  ],
  "notMapped": [
+  {
+   "id": "idot_2025_upload",
+   "name": "Illinois 2025 agency totals",
+   "url": "https://idot.illinois.gov/form-and-reports/crash-reports/illinois-traffic-and-pedestrian-stop-study.html",
+   "why": "Search the 775 reporting agencies in Stop history. Agency names establish who reported a stop. Statewide local location codes have no verified statewide boundary dictionary."
+  },
+  {
+   "id": "cpd_2025_outside",
+   "name": "Chicago 2025 outside-city stops",
+   "url": "https://directives.chicagopolice.org/forms/CPD-63.450.pdf",
+   "why": "1,884 records use CPD’s outside-city code 3100. They count toward the Chicago agency total only."
+  },
+  {
+   "id": "lake_bluff_2025_upload",
+   "name": "Lake Bluff Police 2025",
+   "url": "https://maps.lakecountyil.gov/Output/DistrictMaps/city/VillageofLakeBluff.pdf",
+   "why": "The agency directory includes 1,517 revised records. The village boundary provides community context. None of the eight reported location codes has a verified subarea boundary."
+  },
   {
    "id": "urbana",
    "name": "Urbana IDOT stop sheets",
@@ -1707,15 +1755,16 @@
   "42_-87.75": 404
  },
  "beatFiles": [
-  "beats/urbana_ivc.json"
+  "beats/urbana_ivc.json",
+  "beats/cpd_2025.json"
  ],
  "totals": {
-  "stops": 7766114,
-  "mapped": 7766114,
-  "unmapped": 1511342,
-  "beats": 1,
+  "stops": 7989081,
+  "mapped": 7989081,
+  "unmapped": 1513226,
+  "beats": 275,
   "cells": 183115
  },
- "counting_note": "Accepted source stop records, not a verified count of unique encounters across all publishers. Chicago deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells.",
+ "counting_note": "Accepted source stop records, not a verified count of unique encounters across all publishers. The Stanford Chicago series deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells. CPD 2025 counts reported rows, including possible repeats.",
  "subscription": "not-gated"
 }

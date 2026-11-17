@@ -12,6 +12,7 @@ import { SOURCES, QUARANTINED, sourceURL, boundaryURL } from './stop-heat-source
 import { StopValidator, jurisdictionContains, occupiedArea } from './stop-heat-validation.mjs';
 import { HeatAgg, makeStop, outcomesFrom, classifyReason, parseHour, serialize, assertOutputClean, cityBeat, GRID_M, TILE_DEG, YEAR_BASE, TOD, DOW, REASONS } from './stop-heat-lib.mjs';
 import { chicagoEncounterKey, urbanaLocationCode, urbanaReason } from './stop-heat-identity.mjs';
+import { appendIllinois2025 } from './illinois-2025-coverage.mjs';
 const UA = { 'User-Agent': 'PatrolRadar historical stop research (github.com/missionaryj/patrol-radar)' };
 const digest = b => createHash('sha256').update(b).digest('hex');
 const licenseNotices = JSON.parse(readFileSync(new URL('../docs/stop-heat-license-notices.json', import.meta.url), 'utf8'));
@@ -270,6 +271,7 @@ export async function build({ cache, out, offline = false, asOf = new Date().toI
         sources, notMapped: QUARANTINED, coverage, tiles: Object.fromEntries([...built.tiles].map(([k, v]) => [k, v.length])), beatFiles: [...built.beatFiles.keys()].sort().map(k => `beats/${k}.json`),
         totals: { stops: agg.mapped, mapped: agg.mapped, unmapped: sources.reduce((a, s) => a + s.audit.rejected, 0), beats: built.beats, cells: built.cells },
         counting_note: 'Accepted source stop records, not a verified count of unique encounters across all publishers. Chicago deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells.', subscription: 'not-gated' };
+    if (!only) built.beatFiles.set('cpd_2025', appendIllinois2025(index));
     assertOutputClean(index);
     for (const rows of built.tiles.values())
         assertOutputClean(rows);
