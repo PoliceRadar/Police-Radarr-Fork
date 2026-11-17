@@ -750,6 +750,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   let hasVerifiedPro = false;
   let foundingTester = false;
   let legacyFounderHint = false;
+  let founderChecked = false;
   let proClient: PlayProClient | undefined;
   const proFields = ['heat-year-set', 'heat-tod-set', 'heat-dow-set'].map(id => $(id) as HTMLSelectElement);
   const proLabels = new Map(proFields.map(field => [field, field.getAttribute('aria-label') ?? '']));
@@ -776,7 +777,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
       field.disabled = !hasVerifiedPro;
       field.setAttribute('aria-label', (proLabels.get(field) ?? '') + (hasVerifiedPro ? '' : ' (Pro subscription required)'));
     }
-    if (offer) offer.hidden = hasVerifiedPro || legacyFounderHint;
+    if (offer) offer.hidden = !nativePlugin() || !founderChecked || hasVerifiedPro || legacyFounderHint;
     founderClaim.hidden = hasVerifiedPro || !legacyFounderHint;
     upgrade.disabled = !proClient || hasVerifiedPro || legacyFounderHint;
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
@@ -855,6 +856,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
       storage: localStorage,
     });
     legacyFounderHint = hint.foundingTester;
+    founderChecked = true;
     presentPro();
     if (!nativePlugin()) { setBillingMessage('Subscriptions are available in the Android app only.'); return; }
     try {
