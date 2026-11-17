@@ -23,7 +23,12 @@ export async function refreshToken(token: string, presentedBy?: string) {
   if (!verdict.productMatches) throw new Error('This purchase is not Patrol Radar Pro');
   const { data: previous } = await db.from('pro_purchases').select('user_id')
     .eq('token_sha256', tokenHash).maybeSingle();
-  let owner = presentedBy || previous?.user_id;
+  // Never transfer a previously claimed purchase merely because another client
+  // replays its token. Ownership recovery needs a separate verified support flow.
+  if (previous?.user_id && presentedBy && previous.user_id !== presentedBy) {
+    throw new Error('Purchase already linked to another account');
+  }
+  let owner = previous?.user_id || presentedBy;
   if (!owner && verdict.linkedPurchaseToken) {
     const linkedHash = await sha256(verdict.linkedPurchaseToken);
     const { data: linked } = await db.from('pro_purchases').select('user_id')
