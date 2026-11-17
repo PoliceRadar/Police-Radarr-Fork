@@ -131,7 +131,7 @@ describe('stop heat processed files', () => {
       JSON.parse(text);
     }
     expect(readdirSync(dir, { recursive: true }).some((f: string | Buffer) => String(f).endsWith('.csv') || String(f).endsWith('.zip'))).toBe(false);
-    expect(idx.beatFiles).toEqual(['beats/urbana_ivc.json']);
+    expect(idx.beatFiles).toEqual(['beats/urbana_ivc.json', 'beats/cpd_2025.json']);
     const beat = JSON.parse(readFileSync(dir + 'beats/urbana_ivc.json', 'utf8'));
     expect(beat.features).toHaveLength(1);
     expect(beat.features[0].properties.place).toBe('Urbana city');
@@ -142,7 +142,10 @@ describe('stop heat processed files', () => {
       for (let i = 0; i < src.length; i += 2) totals.set(src[i], (totals.get(src[i]) ?? 0) + src[i + 1]);
       for (let i = 1; i < b.length; i += 2) buckets += b[i];
     };
-    for (const feature of beat.features) addBuckets(feature.properties.src, feature.properties.b);
+    for (const file of idx.beatFiles) {
+      const collection = JSON.parse(readFileSync(dir + file, 'utf8'));
+      for (const feature of collection.features) addBuckets(feature.properties.src, feature.properties.b);
+    }
     for (const key of Object.keys(idx.tiles)) {
       const cells = JSON.parse(readFileSync(`${dir}tiles/${key}.json`, 'utf8'));
       for (const cell of cells) addBuckets(cell[2], cell[3]);

@@ -1,5 +1,6 @@
 import { mountMapSettings } from './settings/mapSettings';
 import { PingGate, PingPlayer, soundEnabled, setSoundEnabled } from './alert/ping';
+import { mountIllinoisDirectory } from './map/illinoisAgencyDirectory';
 import './style.css';
 // In the Android app, open the v2 UI.
 if ((globalThis as any).Capacitor?.isNativePlatform?.()) location.replace('v2/index.html');
@@ -181,6 +182,7 @@ const FLOCK_URL = `${import.meta.env.BASE_URL}data/flock/`;
       .catch(e => { if (fs) fs.textContent = `Flock layer unavailable (${(e as Error).message})`; }); };
   const on = localStorage.getItem('pr.flockmap') !== '0'; if (fb) { fb.checked = on; fb.onchange = () => setFlock(fb.checked); } setFlock(on); }
 // Historical stop heat (beats / ~150 m cells). Extension point: may later be subscription-gated; no billing here.
+mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 { const hb = document.getElementById('stopheat') as HTMLInputElement | null; const hs = document.getElementById('stopheat-status');
   const setHeat = (on: boolean) => { localStorage.setItem('pr.stopheat', on ? '1' : '0');

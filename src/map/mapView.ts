@@ -121,7 +121,7 @@ export class MapView {
   private flockRenderer = L.canvas({ padding: 0.3 });
   private tcIdx?: TcIndex; private tcBase = ''; private tcTiles = new Map<string, Promise<TcRow[]>>(); private tcOn = false; private tcLoading?: Promise<void>; private tcDraw = 0; private tcTimer?: number; private tcTypes?: Set<TcType>;
   private heatIdx?: StopHeatIndex; private heatBase = ''; private heatOn = false; private heatPreview = true; private heatFilter: HeatFilter = { ...OPEN_FILTER };
-  private heatTiles = new Map<string, Promise<HeatCell[] | undefined>>(); private heatBeats: { features?: { geometry: { type: string; coordinates: number[][][] | number[][][][] }; properties: Record<string, any> }[] }[] = [];
+  private heatTiles = new Map<string, Promise<HeatCell[] | undefined>>(); private heatBeats: { features?: { bbox?: number[]; geometry: { type: string; coordinates: number[][][] | number[][][][] }; properties: Record<string, any> }[] }[] = [];
   private heatLoading?: Promise<void>; private heatDraw = 0; private heatTimer?: number; private heatRenderer!: L.Renderer;
   /** Live dots/rings on one canvas: hundreds of SVG paths rebuilt per refresh janked the map (see scripts/stress). */
   private liveRenderer = L.canvas({ padding: 0.3 });
@@ -148,7 +148,7 @@ export class MapView {
     this.present2D(!this.wants3d);
     const el3 = L.DomUtil.create('div', 'map3d', el); el3.hidden = true; L.DomEvent.disableClickPropagation(el3); L.DomEvent.disableScrollPropagation(el3);
     this.m3 = new Map3D(el3, this.dark ? 'dark' : 'light', () => this.follow.userPanned(), () => { void this.set3D(false); this.on3DFailure?.(); this.onPresentationChange?.('fallback'); });
-    this.m3.onMoveEnd = () => { if (this.flockOn) this.scheduleFlock(); };
+    this.m3.onMoveEnd = () => { if (this.flockOn) this.scheduleFlock(); this.scheduleHeat(); };
     // Traffic cameras get their own pane above the overlay canvas (so they stay tappable); the own-location dot and its
     // accuracy circle sit in a still higher, click-through pane so nothing can ever cover them.
     this.map.createPane('tcPane').style.zIndex = '420';
@@ -165,7 +165,7 @@ export class MapView {
     // Follow-me moves the map every frame, so redraw Flock dots at most every ~400 ms instead of on every moveend.
     this.map.on('moveend', () => { if (this.flockOn) this.scheduleFlock();
       if (this.tcOn && this.tcTimer === undefined) this.tcTimer = window.setTimeout(() => { this.tcTimer = undefined; void this.drawTc(); }, 400);
-      if (this.heatOn && this.heatTimer === undefined) this.heatTimer = window.setTimeout(() => { this.heatTimer = undefined; void this.drawHeat(); }, 400); });
+      this.scheduleHeat(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.kick(); });
     if (opts.layersControl ?? true) L.control.layers(undefined, { 'Flock camera (mapped)': this.flockLayer, 'Traffic cameras': this.tcLayer, 'Stop history': this.heatLayer, 'BLE detections': this.layer, 'Live devices (estimate)': this.liveLayer, 'Crowd (shared, delayed)': this.crowdLayer }).addTo(this.map);
     if (opts.waitForLocation) this.startup = new InitialMapView((lat, lng, zoom) => {
@@ -398,12 +398,17 @@ export class MapView {
   setStopHeatFilter(f: HeatFilter) { this.heatFilter = this.heatPreview ? { ...OPEN_FILTER } : f; if (this.heatOn) void this.drawHeat(); }
   get stopHeatInfo() { return this.heatIdx; }
   private async loadHeat(baseUrl: string) {
+    if (this.heatLoading && this.heatBase === baseUrl) return this.heatLoading;
     if (this.heatIdx && this.heatBase === baseUrl) return;
     this.heatBase = baseUrl; this.heatTiles.clear();
     this.heatLoading = fetch(`${baseUrl}index.json`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(async (i: StopHeatIndex) => {
+      const files = await Promise.all((i.beatFiles ?? []).map(async f => {
+        const response = await fetch(baseUrl + f);
+        if (!response.ok) throw new Error(`Historical boundaries unavailable (HTTP ${response.status})`);
+        return response.json();
+      }));
+      this.heatBeats = files;
       this.heatIdx = i;
-      const files = await Promise.all((i.beatFiles ?? []).map(f => fetch(`${baseUrl}${f}`).then(r => r.ok ? r.json() : null)));
-      this.heatBeats = files.filter(Boolean);
     });
     try { await this.heatLoading; } catch (e) { this.heatLoading = undefined; this.heatIdx = undefined; throw e; }
   }
@@ -412,6 +417,12 @@ export class MapView {
     if (!p) { p = fetch(`${this.heatBase}tiles/${k}.json`).then(r => r.ok ? r.json() : undefined); p.catch(() => this.heatTiles.delete(k)); this.heatTiles.set(k, p); }
     return p;
   }
+  private scheduleHeat() {
+    if (this.heatOn && this.heatTimer === undefined) this.heatTimer = window.setTimeout(() => {
+      this.heatTimer = undefined;
+      void this.drawHeat();
+    }, 400);
+  }
   private async drawHeat() {
     if (this.waitingForLocation) return;
     const gen = ++this.heatDraw; const idx = this.heatIdx;
@@ -419,7 +430,10 @@ export class MapView {
     const f = this.heatFilter;
     const paint = (n: number) => { const p = heatPaint(n); return { color: p.stroke, weight: 1, opacity: 0.9, fillColor: p.stroke, fillOpacity: p.fillOpacity * (this.heatPreview ? 0.4 : 1) }; };
     const features: GeoJSON.Feature[] = [];
+    const bounds = (this.m3.active && this.m3.bounds()) || this.map.getBounds();
     for (const fc of this.heatBeats) for (const feat of fc.features ?? []) {
+      const b = feat.bbox;
+      if (b && (b[2] < bounds.getWest() || b[0] > bounds.getEast() || b[3] < bounds.getSouth() || b[1] > bounds.getNorth())) continue;
       if (!countBuckets(feat.properties.b ?? [], feat.properties.o, f, idx.yearBase).n) continue;
       features.push({ type: 'Feature', geometry: feat.geometry as GeoJSON.Geometry, properties: feat.properties });
     }

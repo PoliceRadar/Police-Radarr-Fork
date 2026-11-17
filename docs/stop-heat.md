@@ -2,6 +2,8 @@
 
 This map is historical, regional, visual-only shading. It does not show current police activity, identify people, or predict enforcement. Publisher coordinates may be anonymized or inaccurate. A 150 m display grid is **not** a claim of 150 m source accuracy.
 
+The November 16 draft adds 222,967 Chicago 2025 records on verified beat codes and a separate Illinois agency directory. The map snapshot totals 7,989,081 records. [Illinois ingestion and coverage](illinois-2025-traffic-audit.md)
+
 ## Rebuild and review
 
 Use Node 20+ and `npm ci`. Windows uses the bundled `tar`; Linux/macOS require `unzip` for ZIP archives. Install `csv-parse` and `polygon-clipping` from the lockfile, not ad hoc processing scripts.
