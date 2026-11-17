@@ -121,6 +121,22 @@ public class PatrolScanPlugin extends Plugin {
         call.resolve(r);
     }
 
+    /** Epoch millis of PackageInfo.firstInstallTime. Read-only; updates do not change it. Does not start or stop scanning. */
+    @PluginMethod public void firstInstallTime(PluginCall call) {
+        try {
+            android.content.pm.PackageManager pm = getContext().getPackageManager();
+            String pkg = getContext().getPackageName();
+            android.content.pm.PackageInfo info = Build.VERSION.SDK_INT >= 33
+                ? pm.getPackageInfo(pkg, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                : pm.getPackageInfo(pkg, 0);
+            JSObject r = new JSObject();
+            r.put("firstInstallTime", info.firstInstallTime);
+            call.resolve(r);
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            call.reject("install time unavailable");
+        }
+    }
+
     /** Opens the system dialog to exempt the app from battery optimisation (user choice). */
     @PluginMethod public void openBatterySettings(PluginCall call) {
         PowerManager pm = (PowerManager) getContext().getSystemService(android.content.Context.POWER_SERVICE);
