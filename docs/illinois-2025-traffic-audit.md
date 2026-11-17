@@ -48,3 +48,30 @@ The original counts-only review receipts in `docs/data/illinois-2025/` describe 
 ## Test and release status
 
 Changes on this feature branch can be tested independently. The main branch triggers public website and rolling Android debug releases. Google Play testing is a separate release action.
+
+## Springfield and Champaign 2025 shading
+
+On 2026-11-16 the statewide extracts were recounted for four municipal agencies and compared with `public/data/illinois-2025/agencies.json`. File 1 was a four-city filtered slice (`idot1_four_cities.txt`) of `2025 Traffic Data 1 Redacted .txt`; its SHA-256 does not match the full-file audit receipt. Files 2A and 2B matched the audit SHA-256 values. Agency totals still match the directory: Springfield 9,934, Champaign 4,701, Urbana 1,775, and Decatur 5,245.
+
+Springfield Police (code 13805) uses location codes 100–800 only. Those eight codes match the City of Springfield `SPD/Beat` FeatureServer layer 0 field `BEAT` one-to-one, so all 9,934 rows are shaded as ordinary Stop History beats in `public/data/stop-heat/beats/spd_2025.json`.
+
+Champaign Police (code 13111) location codes are district abbreviations, not the numbered Police Beats layer. They were matched to the City of Champaign Police Districts MapServer layer 26 field `District` with a case-insensitive exact comparison only:
+
+- CHN → North
+- CHS → South
+- CHNW → Northwest
+- CHSW → Southwest
+
+That includes mixed-case variants such as `chs` and `cHN`. 4,691 rows are shaded in `public/data/stop-heat/beats/champaign_2025.json`. The remaining 10 rows (CHW 2, 740, 796, CHNNW, CNW, S, SHW, URBANA, Urb) are listed under “Listed, not shaded” and are not guessed.
+
+Urbana Police (code 13100) mostly uses beats 61–65 (1,769 rows) with six other codes on 6 rows. Decatur Police (code 13588) uses 801–810 on every row. Those codes are recorded, but no free public boundary file is available, so they are not shaded.
+
+Reproduce the city aggregates, with the raw TXT files kept outside the checkout:
+
+```sh
+python scripts/build-illinois-2025-cities.py --file1-slice ../idot1_four_cities.txt --file2a "../2025 Traffic Data 2A Redacted .txt" --file2b "../2025 Traffic Data 2B Redacted.txt" --springfield-boundaries ../springfield-police-beats.geojson --champaign-boundaries ../champaign-police-districts.geojson --out ../illinois-city-derived
+python scripts/test-illinois-2025.py
+npm test
+```
+
+The committed boundary snapshots in `docs/data/illinois-2025/` keep only geography fields. Officer name, email and phone from the Champaign district download were not stored.

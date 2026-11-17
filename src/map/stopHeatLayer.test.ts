@@ -131,7 +131,7 @@ describe('stop heat processed files', () => {
       JSON.parse(text);
     }
     expect(readdirSync(dir, { recursive: true }).some((f: string | Buffer) => String(f).endsWith('.csv') || String(f).endsWith('.zip'))).toBe(false);
-    expect(idx.beatFiles).toEqual(['beats/urbana_ivc.json', 'beats/cpd_2025.json']);
+    expect(idx.beatFiles).toEqual(['beats/urbana_ivc.json', 'beats/cpd_2025.json', 'beats/spd_2025.json', 'beats/champaign_2025.json']);
     const beat = JSON.parse(readFileSync(dir + 'beats/urbana_ivc.json', 'utf8'));
     expect(beat.features).toHaveLength(1);
     expect(beat.features[0].properties.place).toBe('Urbana city');

@@ -91,6 +91,26 @@ function renderDirectory(body: HTMLElement, data: Directory) {
         note.textContent = '222,967 rows appear on 274 Chicago beats. The total includes 1,884 outside-city rows.';
         item.append(note);
       }
+      if (agency.code === '13805') {
+        const note = document.createElement('small');
+        note.textContent = '9,934 rows appear on 8 Springfield police beats.';
+        item.append(note);
+      }
+      if (agency.code === '13111') {
+        const note = document.createElement('small');
+        note.textContent = '4,691 rows appear on 4 Champaign police districts (CHN, CHS, CHNW, CHSW, without regard to case). 10 rows have location codes that do not match a district and are not shaded.';
+        item.append(note);
+      }
+      if (agency.code === '13100') {
+        const note = document.createElement('small');
+        note.textContent = 'Location codes are recorded, including 61–65, but no free public beat-boundary file is available, so these stops are not shaded.';
+        item.append(note);
+      }
+      if (agency.code === '13588') {
+        const note = document.createElement('small');
+        note.textContent = 'Location codes 801–810 are consistent, but no free public beat-boundary file is available, so these stops are not shaded.';
+        item.append(note);
+      }
       list.append(item);
     }
     status.textContent = matches.length ? 'Showing ' + (start + 1) + '–' + Math.min(start + pageSize, matches.length) +
