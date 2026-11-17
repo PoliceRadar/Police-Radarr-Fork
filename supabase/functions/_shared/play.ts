@@ -107,6 +107,6 @@ export async function verifyPubSubPush(req: Request): Promise<boolean> {
   const check = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(jwt));
   if (!check.ok) return false;
   const token = await check.json();
-  return token.iss === 'https://accounts.google.com' && token.aud === expectedAudience &&
+  return (token.iss === 'https://accounts.google.com' || token.iss === 'accounts.google.com') && token.aud === expectedAudience &&
     token.email === expectedEmail && String(token.email_verified) === 'true';
 }
