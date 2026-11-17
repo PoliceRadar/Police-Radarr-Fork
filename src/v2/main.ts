@@ -862,7 +862,8 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     try {
       proClient = await PlayProClient.create();
       await proClient.listen(applyVerified, setBillingMessage);
-      applyVerified(await proClient.status());
+      // Catch purchases completed while the app was backgrounded or killed.
+      applyVerified(await proClient.restore());
       if (!foundingTester && !legacyFounderHint) {
         const product = await proClient.getProduct();
         if (product.productId === 'patrol_radar_pro' && product.basePlanId === 'monthly') {
