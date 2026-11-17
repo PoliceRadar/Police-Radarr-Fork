@@ -36,6 +36,7 @@ import { nativeAppPresent, applyPlatformSettings } from './platform';
 import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
+import { FOUNDING_TESTER_LABEL, loadProEntitlement, readNativeFirstInstallTime } from '../entitlement/pro';
 
 // A single map and BLE scanning session serve Patrol and Navigation.
 // The destination picker is a separate full-screen view; a chosen route launches the driving HUD.
@@ -736,24 +737,36 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
   apply(); if (tcSet.show) deferredMapLayers.push(() => { if(tcSet.show) void show(true); });
 }
 // Historical Stop History preview and Pro presentation. Purchases must not be enabled without verified Play Billing.
+// Illinois agency totals stay free. Chicago 2025 beats are ordinary Stop History beats: lighter all-period preview, full shading and period filters with Pro.
 mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 const HEAT_FILTER_KEY = 'pr.stopheat.filter';
 const PRO_MONTHLY_USD = 1.99;
-// Fail closed: never infer a paid entitlement from localStorage, URL parameters, or the UI.
-const hasVerifiedPro = false; // TODO: replace with verified, server-backed Google Play entitlement.
+// Purchases stay fail-closed: Play Billing is not consulted, and a paid entitlement is never read from localStorage or the URL.
+// The only Pro grant in this build is Android install-date grandfathering (src/entitlement/pro.ts). Web stays on the free preview.
 { const ck = (id: string) => document.getElementById(id) as HTMLInputElement;
   const sel = (id: string) => document.getElementById(id) as HTMLSelectElement;
   const page = $('heat-settings'), st = document.getElementById('heat-status'), sum = document.getElementById('heat-summary');
   const openHeat = (o: boolean) => { page.classList.toggle('open', o); page.setAttribute('aria-hidden', String(!o)); };
-  map.setStopHeatPreview(!hasVerifiedPro);
-  $('heat-upgrade').onclick = () => toast(`Patrol Radar Pro: ${PRO_MONTHLY_USD.toFixed(2)}/month planned. Purchases are not live yet.`);
-  for (const id of ['heat-year-set', 'heat-tod-set', 'heat-dow-set']) {
-    const field = $(id) as HTMLSelectElement; field.disabled = !hasVerifiedPro;
-    field.setAttribute('aria-label', field.getAttribute('aria-label') + (!hasVerifiedPro ? ' (Pro subscription required)' : ''));
-  }
+  let hasVerifiedPro = false;
+  let foundingTester = false;
+  const proFields = ['heat-year-set', 'heat-tod-set', 'heat-dow-set'].map(id => $(id) as HTMLSelectElement);
+  const proLabels = new Map(proFields.map(field => [field, field.getAttribute('aria-label') ?? '']));
   const offer = document.getElementById('heat-pro-offer');
-  if (offer) offer.hidden = hasVerifiedPro;
+  const foundingEl = document.getElementById('founding-tester');
+  const filterNote = document.getElementById('heat-filter-note');
+  const presentPro = () => {
+    map.setStopHeatPreview(!hasVerifiedPro);
+    for (const field of proFields) {
+      field.disabled = !hasVerifiedPro;
+      field.setAttribute('aria-label', (proLabels.get(field) ?? '') + (hasVerifiedPro ? '' : ' (Pro subscription required)'));
+    }
+    if (offer) offer.hidden = hasVerifiedPro;
+    if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
+    if (filterNote) filterNote.hidden = hasVerifiedPro;
+  };
+  presentPro();
+  $('heat-upgrade').onclick = () => toast(`Patrol Radar Pro: ${PRO_MONTHLY_USD.toFixed(2)}/month planned. Purchases are not live yet.`);
   $('open-heat').onclick = () => openHeat(true); $('back-heat').onclick = () => openHeat(false);
   $('close-settings').addEventListener('click', () => openHeat(false)); $('scrim').addEventListener('click', () => openHeat(false));
   let saved: HeatFilter = { year: null, tod: null, dow: null };
@@ -797,6 +810,16 @@ const hasVerifiedPro = false; // TODO: replace with verified, server-backed Goog
   const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') !== '0';
   m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
   applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
+  void loadProEntitlement({
+    platform: nativePlugin() ? 'android' : 'web',
+    readInstallTime: () => readNativeFirstInstallTime(nativePlugin()),
+    storage: localStorage,
+  }).then(entitlement => {
+    hasVerifiedPro = entitlement.pro;
+    foundingTester = entitlement.foundingTester;
+    presentPro();
+    applyFilter();
+  }).catch(() => { /* stay on the free preview */ });
 }
 let tcBannerT: number | undefined, tcBusy = false;
 function showTcBanner(a: TcAlert) {
