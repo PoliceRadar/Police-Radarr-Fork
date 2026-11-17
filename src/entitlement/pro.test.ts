@@ -109,6 +109,14 @@ describe('install-date grandfathering', () => {
     expect(main).not.toContain('verifiedPurchase:');
   });
 
+  it('keeps the Illinois agency directory free of the Pro lock', () => {
+    const html = readFileSync(new URL('../../v2/index.html', import.meta.url), 'utf8');
+    const main = readFileSync(new URL('../v2/main.ts', import.meta.url), 'utf8');
+    expect(html).toContain('id="illinois-agencies"');
+    expect(main).toContain('mountIllinoisDirectory(');
+    expect(main.indexOf('mountIllinoisDirectory(')).toBeLessThan(main.indexOf('let hasVerifiedPro'));
+  });
+
   it('leaves purchases locked unless a caller supplies a verified purchase', () => {
     expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false }).pro).toBe(false);
     expect(resolveEntitlement({

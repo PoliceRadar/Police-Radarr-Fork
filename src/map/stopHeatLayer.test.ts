@@ -144,7 +144,17 @@ describe('stop heat processed files', () => {
     };
     for (const file of idx.beatFiles) {
       const collection = JSON.parse(readFileSync(dir + file, 'utf8'));
-      for (const feature of collection.features) addBuckets(feature.properties.src, feature.properties.b);
+      for (const feature of collection.features) {
+        addBuckets(feature.properties.src, feature.properties.b);
+        if (file.endsWith('cpd_2025.json')) {
+          const open = countBuckets(feature.properties.b, feature.properties.o, { year: null, tod: null, dow: null }).n;
+          const year2025 = countBuckets(feature.properties.b, feature.properties.o, { year: 2025, tod: null, dow: null }).n;
+          const year2024 = countBuckets(feature.properties.b, feature.properties.o, { year: 2024, tod: null, dow: null }).n;
+          expect(open).toBeGreaterThan(0);
+          expect(year2025).toBe(open);
+          expect(year2024).toBe(0);
+        }
+      }
     }
     for (const key of Object.keys(idx.tiles)) {
       const cells = JSON.parse(readFileSync(`${dir}tiles/${key}.json`, 'utf8'));

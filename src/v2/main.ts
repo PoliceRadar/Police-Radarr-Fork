@@ -737,6 +737,7 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
   apply(); if (tcSet.show) deferredMapLayers.push(() => { if(tcSet.show) void show(true); });
 }
 // Historical Stop History preview and Pro presentation. Purchases must not be enabled without verified Play Billing.
+// Illinois agency totals stay free. Chicago 2025 beats are ordinary Stop History beats: lighter all-period preview, full shading and period filters with Pro.
 mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 const HEAT_FILTER_KEY = 'pr.stopheat.filter';
