@@ -37,6 +37,7 @@ import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
 import { FOUNDING_TESTER_LABEL, loadProEntitlement, readNativeFirstInstallTime } from '../entitlement/pro';
+import { PlayProClient, type ProStatus } from '../entitlement/playBilling';
 
 // A single map and BLE scanning session serve Patrol and Navigation.
 // The destination picker is a separate full-screen view; a chosen route launches the driving HUD.
@@ -741,19 +742,33 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
 mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 const HEAT_FILTER_KEY = 'pr.stopheat.filter';
-const PRO_MONTHLY_USD = 1.99;
-// Purchases stay fail-closed: Play Billing is not consulted, and a paid entitlement is never read from localStorage or the URL.
-// The only Pro grant in this build is Android install-date grandfathering (src/entitlement/pro.ts). Web stays on the free preview.
+// No local value grants Pro. Even founding-tester hints only change the onboarding controls.
 { const ck = (id: string) => document.getElementById(id) as HTMLInputElement;
   const sel = (id: string) => document.getElementById(id) as HTMLSelectElement;
   const page = $('heat-settings'), st = document.getElementById('heat-status'), sum = document.getElementById('heat-summary');
   const openHeat = (o: boolean) => { page.classList.toggle('open', o); page.setAttribute('aria-hidden', String(!o)); };
   let hasVerifiedPro = false;
   let foundingTester = false;
+  let legacyFounderHint = false;
+  let proClient: PlayProClient | undefined;
   const proFields = ['heat-year-set', 'heat-tod-set', 'heat-dow-set'].map(id => $(id) as HTMLSelectElement);
   const proLabels = new Map(proFields.map(field => [field, field.getAttribute('aria-label') ?? '']));
   const offer = document.getElementById('heat-pro-offer');
   const foundingEl = document.getElementById('founding-tester');
+  const founderClaim = document.getElementById('founder-claim')!;
+  const billingStatus = document.getElementById('pro-billing-status')!;
+  const upgrade = $('heat-upgrade') as HTMLButtonElement;
+  const restore = $('pro-restore') as HTMLButtonElement;
+  const activate = $('founder-activate') as HTMLButtonElement;
+  const setBillingMessage = (msg: string) => { billingStatus.textContent = msg; };
+  const applyVerified = (status: ProStatus) => {
+    hasVerifiedPro = status.pro;
+    foundingTester = status.foundingTester;
+    presentPro();
+    applyFilter();
+    setBillingMessage(status.foundingTester ? 'Founding tester: complimentary Pro confirmed.' :
+      status.pro ? 'Pro active and verified with Google Play.' : 'Free preview active.');
+  };
   const filterNote = document.getElementById('heat-filter-note');
   const presentPro = () => {
     map.setStopHeatPreview(!hasVerifiedPro);
@@ -761,12 +776,33 @@ const PRO_MONTHLY_USD = 1.99;
       field.disabled = !hasVerifiedPro;
       field.setAttribute('aria-label', (proLabels.get(field) ?? '') + (hasVerifiedPro ? '' : ' (Pro subscription required)'));
     }
-    if (offer) offer.hidden = hasVerifiedPro;
+    if (offer) offer.hidden = hasVerifiedPro || legacyFounderHint;
+    founderClaim.hidden = hasVerifiedPro || !legacyFounderHint;
+    upgrade.disabled = !proClient || hasVerifiedPro || legacyFounderHint;
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
     if (filterNote) filterNote.hidden = hasVerifiedPro;
   };
   presentPro();
-  $('heat-upgrade').onclick = () => toast(`Patrol Radar Pro: ${PRO_MONTHLY_USD.toFixed(2)}/month planned. Purchases are not live yet.`);
+  upgrade.onclick = () => {
+    if (!proClient || legacyFounderHint || hasVerifiedPro) return;
+    setBillingMessage('Opening Google Play checkout…');
+    void proClient.purchase().catch(e => setBillingMessage((e as Error).message));
+  };
+  restore.onclick = () => {
+    if (!proClient) return;
+    setBillingMessage('Checking your Google Play purchases…');
+    void proClient.restore().then(applyVerified).catch(e => setBillingMessage((e as Error).message));
+  };
+  activate.onclick = () => {
+    if (!proClient) return;
+    const input = $('founder-code') as HTMLInputElement;
+    activate.disabled = true;
+    void proClient.redeemFounderCode(input.value).then(status => {
+      input.value = '';
+      applyVerified(status);
+    }).catch(e => setBillingMessage((e as Error).message))
+      .finally(() => { activate.disabled = false; });
+  };
   $('open-heat').onclick = () => openHeat(true); $('back-heat').onclick = () => openHeat(false);
   $('close-settings').addEventListener('click', () => openHeat(false)); $('scrim').addEventListener('click', () => openHeat(false));
   let saved: HeatFilter = { year: null, tod: null, dow: null };
@@ -810,16 +846,33 @@ const PRO_MONTHLY_USD = 1.99;
   const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') !== '0';
   m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
   applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
-  void loadProEntitlement({
-    platform: nativePlugin() ? 'android' : 'web',
-    readInstallTime: () => readNativeFirstInstallTime(nativePlugin()),
-    storage: localStorage,
-  }).then(entitlement => {
-    hasVerifiedPro = entitlement.pro;
-    foundingTester = entitlement.foundingTester;
+  void (async () => {
+    // Legacy install-date checks are ONLY a hint to avoid showing a Subscribe button
+    // to existing founding testers. They can never unlock paid content.
+    const hint = await loadProEntitlement({
+      platform: nativePlugin() ? 'android' : 'web',
+      readInstallTime: () => readNativeFirstInstallTime(nativePlugin()),
+      storage: localStorage,
+    });
+    legacyFounderHint = hint.foundingTester;
     presentPro();
-    applyFilter();
-  }).catch(() => { /* stay on the free preview */ });
+    if (!nativePlugin()) { setBillingMessage('Subscriptions are available in the Android app only.'); return; }
+    try {
+      proClient = await PlayProClient.create();
+      await proClient.listen(applyVerified, setBillingMessage);
+      applyVerified(await proClient.status());
+      if (!foundingTester && !legacyFounderHint) {
+        const product = await proClient.getProduct();
+        if (product.productId === 'patrol_radar_pro' && product.basePlanId === 'monthly') {
+          $('pro-price').textContent = product.price + '/month';
+          upgrade.disabled = false;
+        }
+      }
+    } catch (error) {
+      setBillingMessage((error as Error).message);
+      upgrade.disabled = true;
+    }
+  })();
 }
 let tcBannerT: number | undefined, tcBusy = false;
 function showTcBanner(a: TcAlert) {
