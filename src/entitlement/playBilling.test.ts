@@ -10,7 +10,7 @@ const sql = readFileSync('supabase/migrations/20261117000000_play_pro_entitlemen
 
 describe('Play subscription security boundaries', () => {
   it('never upgrades Pro from Android callback or local install/grant flag', () => {
-    expect(app).toContain('applyVerified(await proClient.status())');
+    expect(app).toContain('applyVerified(await proClient.restore())');
     expect(app).toContain('void proClient.purchase()');
     expect(app).not.toContain('hasVerifiedPro = entitlement.pro');
     expect(app).toContain('hasVerifiedPro = status.pro');
