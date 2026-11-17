@@ -35,3 +35,10 @@ Overview answers stay **Yes / Yes (encrypted in transit) / Yes (deletion)**. Add
 - No BLE hardware addresses or raw Wi-Fi observations are attached to Mapbox requests by this application.
 - The prior claim that precise location never leaves the device is no longer true for navigation sessions. Preserve that distinction between Patrol Mode and Navigation Mode in all store listing/help copy.
 - Review Android permission disclosures and the updated public privacy policy as a release gate.
+
+## Google Play Pro purchases and server verification (2026-11-17)
+- App sends the Play subscription purchase token and associated anonymous Supabase user ID to the private Supabase Edge Function over HTTPS; stores token hash, product, state, expiry and verification time server-side. Payment cards are handled by Google Play, not the app.
+- Review the **Financial info → Purchase history** collection answer in Play Console. Subscription entitlement records and purchase metadata are transmitted and retained by our server; do not categorically answer No for Financial data. User IDs (pseudonymous IDs) also apply. Supabase is a service processor; determine any sharing classification based on actual data flow.
+- Collection purpose: app functionality and fraud prevention/security. The app uses no billing tokens for advertising or sale. Data is encrypted in transit; access controlled by service-role-only tables, no public read/write policies.
+- Account deletion: users can request account/subscription-record deletion, subject to legal/fraud retention; deleting app data does not cancel Google Play subscription. Update Play Console and public privacy policy before release.
+- For subscription management and payment cancellation, link https://play.google.com/store/account/subscriptions.
