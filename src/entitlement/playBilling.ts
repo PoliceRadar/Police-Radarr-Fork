@@ -58,7 +58,7 @@ export class PlayProClient {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + data.session.access_token,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY!,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ action, purchaseToken, founderCode }),
@@ -88,7 +88,7 @@ export class PlayProClient {
     for (const purchase of result.purchases ?? []) {
       if (purchase.state === 'purchased' && purchase.productId === PRODUCT) {
         // A bad token must not prevent checking another valid purchase.
-        await this.verify(purchase);
+        try { await this.verify(purchase); } catch { /* next valid purchase can still restore */ }
       }
     }
     return this.status();
