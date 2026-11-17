@@ -1,4 +1,5 @@
 /** Google Play Publisher API client. Never bundle this module into the Android/web app. */
+declare const Deno: { env: { get(key: string): string | undefined } };
 export const PACKAGE = 'io.github.missionaryj.patrolradar';
 export const PRODUCT = 'patrol_radar_pro';
 export const BASE_PLAN = 'monthly';
