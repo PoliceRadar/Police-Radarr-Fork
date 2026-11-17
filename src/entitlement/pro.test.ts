@@ -25,8 +25,8 @@ function memoryStore(initial: Record<string, string> = {}): GrantStore & { write
 }
 
 describe('install-date grandfathering', () => {
-  it('uses the named Open-testing placeholder cutoff', () => {
-    expect(TESTER_CUTOFF_MS).toBe(Date.parse('2026-11-17T00:00:00-06:00'));
+  it('uses the Open testing resume time as the cutoff', () => {
+    expect(TESTER_CUTOFF_MS).toBe(Date.parse('2026-11-16T19:54:00-06:00'));
     expect(Number.isFinite(TESTER_CUTOFF_MS)).toBe(true);
   });
 

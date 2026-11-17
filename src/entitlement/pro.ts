@@ -9,11 +9,8 @@
  * Play purchase. This module does not talk to Play Billing.
  */
 
-/**
- * TODO: set to the Open testing go-live time before that release.
- * Placeholder only: 2026-11-17T00:00:00-06:00. Confirm the real instant before Open testing.
- */
-export const TESTER_CUTOFF_MS = Date.parse('2026-11-17T00:00:00-06:00');
+/** Open testing resumed at 2026-11-16T19:54:00-06:00. Installs strictly before this are founding testers. */
+export const TESTER_CUTOFF_MS = Date.parse('2026-11-16T19:54:00-06:00');
 
 /** Written only after an Android install qualifies. Not a purchase receipt. */
 export const FOUNDING_TESTER_KEY = 'pr.foundingTester';
