@@ -914,6 +914,8 @@
    "name": "Chicago Police · IDOT 2025 traffic stop study",
    "url": "https://idot.illinois.gov/content/dam/soi/en/web/idot/documents/transportation-system/reports/safety/traffic-stop-studies/2025-traffic-stops-part-ii.pdf#page=204",
    "license": "Aggregate counts from IDOT traffic records. Boundaries credited to the City of Chicago.",
+   "license_url": "https://www.chicago.gov/city/en/narr/foia/data_disclaimer.html",
+   "disclaimer": "This site provides applications using data that has been modified for use from its original source, www.cityofchicago.org, the official website of the City of Chicago. The City of Chicago makes no claims as to the content, accuracy, timeliness, or completeness of any of the data provided at this site. The data provided at this site is subject to change at any time. It is understood that the data provided at this site is being used at one's own risk.",
    "fetched": "2026-11-16",
    "last_updated": null,
    "stops": 222967,

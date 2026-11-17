@@ -37,6 +37,8 @@ export function appendIllinois2025(index, collection = JSON.parse(readFileSync(
     index.sources.push({
         id, name: 'Chicago Police · IDOT 2025 traffic stop study', url: report + '#page=204',
         license: 'Aggregate counts from IDOT traffic records. Boundaries credited to the City of Chicago.',
+        license_url: 'https://www.chicago.gov/city/en/narr/foia/data_disclaimer.html',
+        disclaimer: 'This site provides applications using data that has been modified for use from its original source, www.cityofchicago.org, the official website of the City of Chicago. The City of Chicago makes no claims as to the content, accuracy, timeliness, or completeness of any of the data provided at this site. The data provided at this site is subject to change at any time. It is understood that the data provided at this site is being used at one\'s own risk.',
         fetched: '2026-11-16', last_updated: null, stops: mapped, mapped, unmapped: 1884,
         audit: { seen: 224851, accepted: mapped, rejected: 1884, duplicate_rows: 0,
             candidate_repeated_rows: 183, time_range: ['2025-01-01', '2025-12-31'] },

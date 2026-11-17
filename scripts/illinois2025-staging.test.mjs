@@ -97,6 +97,8 @@ describe('2025 Illinois traffic review data', () => {
     const index = asset('stop-heat/index.json');
     const cpd = index.sources.find(s => s.id === 'cpd_2025');
     expect(cpd.audit).toMatchObject({seen:224851, accepted:222967, rejected:1884, candidate_repeated_rows:183});
+    expect(cpd.license_url).toBe('https://www.chicago.gov/city/en/narr/foia/data_disclaimer.html');
+    expect(cpd.disclaimer).toMatch(/www\.cityofchicago\.org/);
     expect(index.notMapped.map(s => s.id)).toEqual(expect.arrayContaining(['cpd_2025_outside', 'idot_2025_upload', 'lake_bluff_2025_upload']));
     expect(() => appendIllinois2025(index)).toThrow(/already included/);
   });
