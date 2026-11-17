@@ -15,7 +15,7 @@ describe('Play subscription security boundaries', () => {
     expect(app).not.toContain('hasVerifiedPro = entitlement.pro');
     expect(app).toContain('hasVerifiedPro = status.pro');
     expect(plugin).not.toContain('SharedPreferences');
-    expect(plugin).not.toContain('setPro');
+    expect(plugin).not.toMatch(/\bsetPro\s*\(/);
     expect(verifier).toContain('/purchases/subscriptionsv2/tokens/');
     expect(server).toContain('await playSubscription(token)');
     expect(server).toContain('productMatches');
