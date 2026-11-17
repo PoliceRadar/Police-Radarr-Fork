@@ -22,12 +22,12 @@ Existing grants use local firstInstallTime or localStorage; the server cannot se
 
 ## Play Console and payment checks
 1. Complete merchant payments profile, identity, tax and bank verification. Only the account owner can do private financial verification.
-2. Confirm product patrol_radar_pro, auto-renewing monthly plan, $1.99 U.S. price and region eligibility. Keep customer-facing activation off until testing is ready.
-3. Configure license-testing accounts and an eligible Play testing track for Google test instruments. Google never charges license tester test purchases.
+2. Confirm product patrol_radar_pro, auto-renewing monthly plan, $1.99 U.S. price and region eligibility. **Activate/publish the base plan before a license-test purchase**: Google does not allow buying draft subscription products, even with license testers. Restrict billing checkout to a controlled Play test build until end-to-end verification passes.
+3. Configure license-testing accounts and first publish the signed billing test AAB to a tightly scoped internal/closed test track to exercise test instruments. Google does not charge valid license testers for test purchases. Do not route ordinary users to checkout before validation.
 4. On the Play-distributed signed build, test initial purchase, delayed/pending, failed verification, acknowledgement, restore, relaunch, renewal, cancellation until paid expiry, account hold, expiration, refund/revocation, duplicate RTDN and server outage. Verify access in every case.
 5. Update Play Console IARC content rating: digital purchases YES. Recheck user-generated content answers for the City Chat feature. Update Data Safety for pseudonymous user ID, purchase/transaction status and verification. Check Financial features declaration as applicable: ordinary Play subscription is not money transfer or financial services.
 6. Publish revised privacy policy and clear recurring price, Google Play payment and cancellation disclosures. Verify public URL.
-7. Confirm highest versionCode already uploaded to any Play track, signing and Play checks. Merge only after review, tests, backend deployment and founder migration.
+7. Confirm highest versionCode already uploaded to any Play track, signing and Play checks. A tightly restricted test-track billing build can be distributed before Open Testing to run the purchase test; only merge the final candidate after review, tests, backend deployment and founder migration.
 8. Get signed main-branch AAB from GitHub Actions and upload ONLY to Open Testing, reusing intended tester lists. Verify release actually reaches Open Testing and do not use production.
 
 ## Limitations and security
