@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PatrolScanPlugin.class);
+        registerPlugin(PlayBillingPlugin.class);
         // Optional native SDK build: no static reference in standard APKs.
         try {
             Class<?> nav = Class.forName("io.github.missionaryj.patrolradar.MapboxNavPlugin");
