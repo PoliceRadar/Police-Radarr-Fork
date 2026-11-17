@@ -93,8 +93,8 @@
   "investigatory",
   "other"
  ],
- "disclaimer": "Historical records only; coverage is uneven and regional. Coordinates are publisher supplied, sometimes anonymized. Stanford’s historical Chicago series collapses identical public stop rows and can still contain duplicate encounters. Urbana is a citywide total: the stops are not located inside the city on this map. Counts use event IDs where available. Shading is visual only, not current police activity or a prediction. Chicago 2025 shows reported counts by police beat. Illinois agency totals include Chicago and do not add to the map total.",
- "attribution": "Stanford Open Policing Project (ODC-BY), including Chicago vehicle stops; Cincinnati Police open data; NYPD Vehicle Stop Reports; dataMontgomery; City of Urbana stop-level traffic stops via data.illinois.gov; U.S. Census Bureau 2020 geography and population. Illinois Department of Transportation, 2025 Traffic Stop Study. Chicago police beat boundaries from the City of Chicago.",
+ "disclaimer": "Historical records only; coverage is uneven and regional. Coordinates are publisher supplied, sometimes anonymized. Stanford’s historical Chicago series collapses identical public stop rows and can still contain duplicate encounters. Urbana is a citywide total: the stops are not located inside the city on this map. Counts use event IDs where available. Shading is visual only, not current police activity or a prediction. Chicago 2025 shows reported counts by police beat. Springfield 2025 shows reported counts by police beat. Champaign 2025 shows reported counts by police district. Illinois agency totals include these agencies and do not add to the map total.",
+ "attribution": "Stanford Open Policing Project (ODC-BY), including Chicago vehicle stops; Cincinnati Police open data; NYPD Vehicle Stop Reports; dataMontgomery; City of Urbana stop-level traffic stops via data.illinois.gov; U.S. Census Bureau 2020 geography and population. Illinois Department of Transportation, 2025 Traffic Stop Study. Chicago police beat boundaries from the City of Chicago. Springfield police beat boundaries from the City of Springfield. Champaign police district boundaries from the City of Champaign.",
  "sources": [
   {
    "id": "opp_mt",
@@ -938,6 +938,65 @@
     "sha256": "775a45ea97fd6ef5f95d6b299bec0732556bb6d6ed8d805338ee298387acd468"
    },
    "note": "274 beats. The agency total includes 1,884 outside-city records (code 3100) excluded from shading. Counts retain 183 possible repeat rows because the extract has no unique encounter identifier."
+  },
+  {
+   "id": "spd_2025",
+   "name": "Springfield Police · IDOT 2025 traffic stop study",
+   "url": "https://idot.illinois.gov/content/dam/soi/en/web/idot/documents/transportation-system/reports/safety/traffic-stop-studies/2025-traffic-stops-part-ii.pdf#page=1228",
+   "license": "Aggregate counts from IDOT traffic records. Boundaries from the City of Springfield SPD Beat FeatureServer. No formal license text is published with the layer.",
+   "fetched": "2026-11-16",
+   "last_updated": null,
+   "stops": 9934,
+   "mapped": 9934,
+   "unmapped": 0,
+   "audit": {
+    "seen": 9934,
+    "accepted": 9934,
+    "rejected": 0,
+    "time_range": [
+     "2025-01-01",
+     "2025-12-31"
+    ],
+    "duplicate_rows": 0
+   },
+   "precision": "Reported beat of stop on the city’s published police beat boundaries (BEAT 100–800).",
+   "boundary": {
+    "url": "https://maps.springfield.il.us/server/rest/services/SPD/Beat/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
+    "sha256": "6e7efb6b6acb07bb5bdd58eb8899c846c424ae7ed3c0de69583f772c094f6f66",
+    "retrieved": "2026-11-16",
+    "download_sha256": "c3f041eee4d6b23f8b8bae314d9f64a60bea51b0b46a60aed6a0e51c671e8abe"
+   },
+   "note": "8 beats. All 9,934 Springfield Police rows use codes 100–800 and are shaded. Counts are reported rows; unique encounters were not independently certified."
+  },
+  {
+   "id": "champaign_2025",
+   "name": "Champaign Police · IDOT 2025 traffic stop study",
+   "url": "https://idot.illinois.gov/content/dam/soi/en/web/idot/documents/transportation-system/reports/safety/traffic-stop-studies/2025-traffic-stops-part-ii.pdf#page=184",
+   "license": "Aggregate counts from IDOT traffic records. Boundaries from the City of Champaign open GIS Police Districts layer. No formal license text is published with the layer.",
+   "license_url": "https://gis-cityofchampaign.opendata.arcgis.com/",
+   "fetched": "2026-11-16",
+   "last_updated": null,
+   "stops": 4691,
+   "mapped": 4691,
+   "unmapped": 10,
+   "audit": {
+    "seen": 4701,
+    "accepted": 4691,
+    "rejected": 10,
+    "time_range": [
+     "2025-01-01",
+     "2025-12-31"
+    ],
+    "duplicate_rows": 0
+   },
+   "precision": "Reported location code matched with a case-insensitive exact comparison to the city’s published police district name: CHN=North, CHS=South, CHNW=Northwest, CHSW=Southwest.",
+   "boundary": {
+    "url": "https://gisportal.champaignil.gov/ms/rest/services/Open_Data/Open_Data/MapServer/26/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
+    "sha256": "7fffc8949cfd169ae0fcc2e33b95d510c0afc4233178ae5f4747cffd9e20b0ce",
+    "retrieved": "2026-11-16",
+    "download_sha256": "806d3cee8babe1c82b532be9800c491aa71ecf1fe932e2f13dd21505933e06b2"
+   },
+   "note": "4 police districts. 4,691 of 4,701 rows match CHN, CHS, CHNW or CHSW without regard to case, including mixed-case variants. 10 rows do not match and are not shaded. The mapping uses the city’s district names, not an invented geography. Counts are reported rows; unique encounters were not independently certified."
   }
  ],
  "notMapped": [
@@ -945,7 +1004,7 @@
    "id": "idot_2025_upload",
    "name": "Illinois 2025 agency totals",
    "url": "https://idot.illinois.gov/form-and-reports/crash-reports/illinois-traffic-and-pedestrian-stop-study.html",
-   "why": "Search the 775 reporting agencies in Stop history. Agency names establish who reported a stop. Statewide local location codes have no verified statewide boundary dictionary."
+   "why": "Search the 775 reporting agencies in Stop history. Agency names establish who reported a stop. Statewide local location codes have no verified statewide boundary dictionary, so most Illinois agencies are not shaded. Chicago beats, Springfield beats, and Champaign police districts from the same 2025 study are shaded where a public boundary file matched the location codes."
   },
   {
    "id": "cpd_2025_outside",
@@ -958,6 +1017,24 @@
    "name": "Lake Bluff Police 2025",
    "url": "https://maps.lakecountyil.gov/Output/DistrictMaps/city/VillageofLakeBluff.pdf",
    "why": "The agency directory includes 1,517 revised records. The village boundary provides community context. None of the eight reported location codes has a verified subarea boundary."
+  },
+  {
+   "id": "champaign_2025_unmatched",
+   "name": "Champaign 2025 unmatched location codes",
+   "url": "https://gisportal.champaignil.gov/ms/rest/services/Open_Data/Open_Data/MapServer/26",
+   "why": "10 of 4,701 Champaign Police rows have location codes that are not a case-insensitive exact match for CHN (North), CHS (South), CHNW (Northwest) or CHSW (Southwest): CHW 2, 740 1, 796 1, CHNNW 1, CNW 1, S 1, SHW 1, URBANA 1, Urb 1. They are not shaded."
+  },
+  {
+   "id": "urbana_2025_upload",
+   "name": "Urbana Police 2025",
+   "url": "https://maps.urbanail.gov/serverwebadaptor/rest/services/PoliceDepartment",
+   "why": "1,775 reported rows for Urbana Police (agency 13100). 1,769 use location codes 61–65; 6 rows use other codes (6, 624, 69, CHN, CHS). The codes are recorded, but no free public beat-boundary file is available, so these stops are not shaded."
+  },
+  {
+   "id": "decatur_2025_upload",
+   "name": "Decatur Police 2025",
+   "url": "https://maps.decaturil.gov/arcgis/rest/services",
+   "why": "5,245 reported rows for Decatur Police (agency 13588) use location codes 801–810. The codes are consistent, but no free public beat-boundary file is available, so these stops are not shaded."
   },
   {
    "id": "urbana",
@@ -1756,15 +1833,17 @@
  },
  "beatFiles": [
   "beats/urbana_ivc.json",
-  "beats/cpd_2025.json"
+  "beats/cpd_2025.json",
+  "beats/spd_2025.json",
+  "beats/champaign_2025.json"
  ],
  "totals": {
-  "stops": 7989081,
-  "mapped": 7989081,
-  "unmapped": 1513226,
-  "beats": 275,
+  "stops": 8003706,
+  "mapped": 8003706,
+  "unmapped": 1513236,
+  "beats": 287,
   "cells": 183115
  },
- "counting_note": "Accepted source stop records, not a verified count of unique encounters across all publishers. The Stanford Chicago series deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells. CPD 2025 counts reported rows, including possible repeats.",
+ "counting_note": "Accepted source stop records, not a verified count of unique encounters across all publishers. The Stanford Chicago series deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells. CPD 2025 counts reported rows, including possible repeats. Springfield and Champaign 2025 count reported rows.",
  "subscription": "not-gated"
 }

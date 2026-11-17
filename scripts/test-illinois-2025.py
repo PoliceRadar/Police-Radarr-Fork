@@ -13,6 +13,9 @@ import zipfile
 spec = importlib.util.spec_from_file_location('audit', Path(__file__).with_name('audit-illinois-2025.py'))
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
+cities_spec = importlib.util.spec_from_file_location('cities', Path(__file__).with_name('build-illinois-2025-cities.py'))
+cities = importlib.util.module_from_spec(cities_spec)
+cities_spec.loader.exec_module(cities)
 
 class TrafficAuditTests(unittest.TestCase):
     def test_seven_pair_cli_reconciles_alternatives_and_writes_only_coarse_outputs(self):
@@ -122,6 +125,17 @@ class TrafficAuditTests(unittest.TestCase):
         first = ['2025-01-01', '01:35:00', '111', '1']
         self.assertNotEqual(audit.fingerprint(first), audit.fingerprint(first[:-1] + ['2']))
         self.assertEqual(audit.fingerprint(first), audit.fingerprint(list(first)))
+
+    def test_champaign_district_mapping_is_case_insensitive_and_exact(self):
+        self.assertEqual(cities.champaign_district('CHN'), 'North')
+        self.assertEqual(cities.champaign_district('chs'), 'South')
+        self.assertEqual(cities.champaign_district(' CHs '), 'South')
+        self.assertEqual(cities.champaign_district('cHN'), 'North')
+        self.assertEqual(cities.champaign_district('chnw'), 'Northwest')
+        self.assertEqual(cities.champaign_district('CHSW'), 'Southwest')
+        for code in ('CHW', 'CHNNW', 'CNW', 'S', 'SHW', 'Urb', 'URBANA', '740', '796', ''):
+            self.assertIsNone(cities.champaign_district(code))
+        self.assertEqual(set(cities.CHAMPAIGN_DISTRICT_BY_CODE.values()), cities.CHAMPAIGN_DISTRICTS)
 
 if __name__ == '__main__':
     unittest.main()
