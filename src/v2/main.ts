@@ -14,6 +14,7 @@ import { ScanStats } from '../ble/stats';
 import { BluefyScanner } from '../ble/bluefyScanner';
 import { NativeScanner, nativePlugin, backgroundScanEndedMessage, type NativeScanMode } from '../ble/nativeScanner';
 import { setupScannerPhrase, syncSetupScanner, webSetupMessage } from './setupCard';
+import { selectLiveHit } from './liveHit';
 import { LiveDeviceTracker, colorFor, WIFI_COLOR, bandRadius, type LiveDevice } from '../map/liveDevices';
 import { corroborationText, type Vehicle } from '../fusion/vehicles';
 import { bandOfMHz } from '../wifi/context';
@@ -390,11 +391,11 @@ if (sel.value === 'bluefy') status('Bluefy detected; Bluefy backend selected. Ta
 
 // ---- sheets ----
 const sheet = $('sheet');
-$('sheet-handle').onclick = () => sheet.classList.toggle('collapsed');
+$('sheet-handle').onclick = () => { sheet.classList.toggle('collapsed'); renderLiveHit(); };
 let y0: number | undefined;
 sheet.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
 sheet.addEventListener('touchend', e => { if (y0 === undefined) return; const dy = e.changedTouches[0].clientY - y0; y0 = undefined;
-  if (dy < -40) sheet.classList.remove('collapsed'); else if (dy > 40 && ($('cards').scrollTop <= 0)) sheet.classList.add('collapsed'); });
+  if (dy < -40) sheet.classList.remove('collapsed'); else if (dy > 40 && ($('cards').scrollTop <= 0)) sheet.classList.add('collapsed'); renderLiveHit(); });
 const setSettings = (open: boolean) => { $('settings').classList.toggle('open', open); $('settings').setAttribute('aria-hidden', String(!open)); $('scrim').hidden = !open; };
 $('open-settings').onclick = () => setSettings(true);
 $('close-settings').onclick = () => setSettings(false);
@@ -446,7 +447,20 @@ function badgeFor(d: LiveDevice, m?: Match) {
   return c === '#e53935' ? { cls: 'axon', text: m.signature.vendor === 'Axon' ? 'Axon' : 'Body cam' } : c === '#fb8c00' ? { cls: 'moto', text: 'Motorola' } : { cls: 'other', text: 'Other' };
 }
 const gradeOf = (c: number) => (c >= 0.85 ? 'strong' : c >= 0.5 ? 'likely' : 'hint');
+function renderLiveHit() {
+  const hit = scanner && document.body.dataset.experience === 'patrol' && sheet.classList.contains('collapsed')
+    ? selectLiveHit(live.list(), fusion.vehicles.list())
+    : null;
+  $('live-hit').hidden = !hit;
+  document.body.classList.toggle('has-live-hit', !!hit);
+  if (!hit) return;
+  $('live-hit-name').textContent = hit.label;
+  $('live-hit-score').textContent = `${hit.percent}%`;
+  $('live-hit-more').textContent = hit.more ? `+${hit.more} more` : '';
+  $('live-hit-more').hidden = !hit.more;
+}
 function renderCards() {
+  renderLiveHit();
   const devs = visible().sort((a, b) => (a.kind === b.kind ? b.lastSeen - a.lastSeen : a.kind === 'match' ? -1 : 1));
   const ul = $('cards');
   const n: Record<string, number> = { axon: 0, moto: 0, other: 0, unk: 0, wifi: 0 };
