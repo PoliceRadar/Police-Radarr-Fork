@@ -19,43 +19,22 @@ The upload uses [r0adkll/upload-google-play](https://github.com/r0adkll/upload-g
 
 Release status is **`completed`** on the chosen testing track (every tester on that track, once Play actually publishes it). This is not a staged production rollout. Release notes for every track are the en-US text: "We squashed bugs and improved performance so Patrol Radar is better for you". The ProGuard `mapping.txt` is attached. Native debug symbols are attached when the AAB job produced `native-debug-symbols.zip`.
 
-## One-time setup
+## Service account
 
-The GitHub secret is `PLAY_SERVICE_ACCOUNT_JSON`. It must be able to release **this app** to testing tracks, and it must not have production release permission.
+The repository secret `PLAY_SERVICE_ACCOUNT_JSON` is already set. It is the JSON key for `play-release@patrol-radar-billing.iam.gserviceaccount.com`. That account is separate from `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` (the Supabase purchase-verification key). Do not put either private key in the repo, in Android, or in chat.
 
-Use a service account that is **not** `play-verifier@patrol-radar-billing.iam.gserviceaccount.com`, or add the testing-track release permission to that verifier account. The verifier key in Supabase (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`) is for purchase checks. A separate upload account keeps a leaked verifier key from shipping builds and a leaked CI key from acknowledging purchases. Prefer a separate account. Do not put a private key in the repo, in Android, or in chat.
+Play Console access for `play-release` is **this app only** (`io.github.missionaryj.patrolradar`):
 
-### 1. Google Cloud
+- **View app information (read-only)**
+- **Release apps to testing tracks**
 
-1. In Play Console open **Setup → API access** and use the Google Cloud project already linked to this developer account. Link a project there first if the page says none is linked. The billing project that owns `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` is the linked project if that account is already invited.
-2. In that project, open [Google Play Android Developer API](https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com) and click **Enable**.
-3. Either create a new service account, or skip to the Play Console step and grant release permission to the verifier account.
-   - **IAM & Admin → Service accounts → Create service account**. Name it `patrol-radar-play-upload`. Do not grant it any Google Cloud IAM roles.
-   - Open the account → **Keys → Add key → Create new key → JSON**.
-4. If you reuse the verifier account, create a JSON key for `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` only if GitHub does not already have one. Do not paste that key into Supabase a second time.
+**Release to production, exclude devices, and use Play App Signing** is not granted. "Release apps to testing tracks" is the permission that creates and rolls out internal, closed, and open testing releases. It cannot publish production. The workflow only calls the testing-track edit APIs (`edits.insert`, bundle upload, `tracks.update` for `internal`, `alpha`, or `beta`, deobfuscation-file upload for `mapping.txt` and native symbols, then `edits.commit`). Those calls are what this permission covers. Internal testing is track id `internal`, so a `main` upload does not need production access or **Manage testing tracks and edit tester lists**. Tester lists stay as they are.
 
-### 2. Play Console permissions
+If the secret is removed or blank, the upload step skips with a notice and the workflow stays green. The `patrol-radar-release-aab` artifact is still there. A value that is not a service-account JSON fails the `play` job.
 
-1. Play Console → **Users and permissions**. Invite the new service account, or open the existing `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` user.
-2. Under **App permissions**, add only **Patrol Radar** (`io.github.missionaryj.patrolradar`). Do not grant account-wide admin.
-3. Grant:
-   - **View app information (read-only)**
-   - **Release apps to testing tracks**
-4. Leave **Release to production, exclude devices, and use Play App Signing** off. Also leave off **Admin (all permissions)**. "Release apps to testing tracks" cannot publish a production release.
-5. Save. A new user can take a few minutes to be accepted by the API. The first upload returns 401 or 403 until it does.
+To rotate the key: Google Cloud project linked from Play Console → **Setup → API access** → the `play-release` service account → **Keys → Add key → JSON**. Replace the repository secret with the new file contents, including the braces, and delete the old key. Keep the same two Play Console permissions. A `main` merge is not held for a GitHub reviewer. Alpha and beta are held in Play Console instead.
 
-You do not need **Manage testing tracks and edit tester lists**. Tester lists stay as they are. Set those up by hand (see [closed-test-checklist.md](closed-test-checklist.md)). The internal testing list has to include the accounts that should receive every `main` build.
-
-### 3. GitHub secret
-
-1. GitHub → `missionaryj/patrol-radar` → **Settings → Secrets and variables → Actions → New repository secret**.
-2. Name: `PLAY_SERVICE_ACCOUNT_JSON`
-3. Value: the entire JSON file, including the braces. Do not wrap it in extra quotes.
-4. Save. Repository secret, not an environment secret. A `main` merge is not held for a GitHub reviewer. Alpha and beta are held in Play Console instead.
-
-A missing secret skips the upload. A secret that is not valid service-account JSON fails the `play` job. The `apk` and `aab` artifacts remain.
-
-### 4. Confirm the tracks
+## Tracks
 
 API track ids, not display names:
 
@@ -95,7 +74,7 @@ The pinned action does not pass `changesInReviewBehavior`. If a review is alread
 
 ## versionName and versionCode
 
-`versionName` is `version` in `package.json`. Gradle reads it when `VERSION_NAME` is unset. Bump `package.json` for each release you want testers to see as a new version name, and do that before an alpha or beta dispatch. The workflow does not bump it. Play will still accept a new versionCode with an unchanged versionName.
+`versionName` is `version` in `package.json`. Gradle reads it when `VERSION_NAME` is unset. The merge that adds this upload ships **1.0.34**. Bump `package.json` again before a later release you want testers to see as a new version name. The workflow does not bump it on its own. Play will still accept a new versionCode with an unchanged versionName.
 
 `versionCode` is `github.run_number` for this workflow file, passed as `VERSION_CODE`. As of 18 November 2026, Internal testing and Open testing are at version code **237**. Run numbers **above 239** are ahead of that. Gaps are normal: pull requests, failed runs, and dispatches all increment the number, and Play allows unused codes.
 
