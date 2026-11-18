@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 
+function redirectScript(html: string): string {
+  const open = html.indexOf('<script>');
+  const close = open < 0 ? -1 : html.indexOf('</script>', open + 8);
+  if (open < 0 || close < 0) throw new Error('root redirect script missing');
+  return html.slice(open + '<script>'.length, close);
+}
+
 function rootLanding(href: string): string | null {
-  const html = readFileSync('index.html', 'utf8');
-  const body = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
-  if (!body) throw new Error('root redirect script missing');
+  const body = redirectScript(readFileSync('index.html', 'utf8'));
   const loc = new URL(href);
   let landed: string | null = null;
   const location = {
