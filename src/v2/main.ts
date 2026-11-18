@@ -37,6 +37,7 @@ import { nativeAppPresent, applyPlatformSettings } from './platform';
 import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
+import { ActivityZoneAlertGate, type ActivityZone, type ActivityLevel } from '../map/historicalZones';
 import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
 import { PlayProClient, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
 import { cachedProValid, effectiveAccess, saveVerifiedStatus } from '../entitlement/proAccess';
@@ -416,6 +417,7 @@ const drawLiveSoon = () => { if (liveTimer !== undefined) return; liveTimer = wi
 setInterval(drawLive, 2000);
 { const other = document.getElementById('showother') as HTMLInputElement | null;
   if (other) { other.checked = localStorage.getItem('pr.showother') === '1'; other.addEventListener('change', () => { localStorage.setItem('pr.showother', other.checked ? '1' : '0'); drawLive(); }); } }
+let checkHistoricalZone = (_lat: number, _lng: number, _accuracy: number): Promise<void> | void => {};
 function startGeo() {
   if (!navigator.geolocation) { map.locationUnavailable(); $('geo').textContent = 'Location unavailable'; return; }
   if (geoWatch !== undefined) navigator.geolocation.clearWatch(geoWatch);
@@ -424,6 +426,7 @@ function startGeo() {
     here = { lat: p.coords.latitude, lng: p.coords.longitude }; drawLive();
     updateActiveGuidance(here, p.coords.accuracy, p.coords.speed);
     void checkTrafficCams({ lat: p.coords.latitude, lng: p.coords.longitude, speed: p.coords.speed, heading: p.coords.heading, t: p.timestamp });
+    void checkHistoricalZone(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
     recorder.fix(p.coords.accuracy, here);
     pos = coarsen(p.coords.latitude, p.coords.longitude);
     $('geo').textContent = `Location ±${Math.round(p.coords.accuracy)} m`;
@@ -431,6 +434,7 @@ function startGeo() {
     map.locationUnavailable();
     recorder.event(err.code === err.PERMISSION_DENIED ? 'location-denied' : 'location-error', undefined, err.message);
     $('geo').textContent = err.code === err.PERMISSION_DENIED ? 'Location denied: allow it for this site, then tap ◎' : `Location error: ${err.message}`;
+    $('history-zone-current').textContent = 'Location unavailable: historical activity zones need GPS.';
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 });
 }
 startGeo();
@@ -903,7 +907,11 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   const applyFilter = () => {
     try { localStorage.setItem(HEAT_FILTER_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
     sync(); map.setStopHeatFilter(hasVerifiedPro ? saved : { year: null, tod: null, dow: null });
-    if (sum) sum.textContent = !ck('stopheat').checked ? 'Hidden' : !hasVerifiedPro ? 'Free preview · Pro filters locked' : saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
+    if (sum) {
+      const shading = !ck('stopheat').checked ? 'Shading off' : !hasVerifiedPro ? 'Free preview · Pro filters locked' :
+        saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
+      sum.textContent = `${shading} · Zone alerts ${ck('history-zone-alerts').checked ? 'on' : 'off'}`;
+    }
   };
   const onSel = (id: string, kind: 'year' | 'tod' | 'dow') => { sel(id).onchange = () => { if (!hasVerifiedPro) return; saved = { ...saved, [kind]: read(sel(id)) }; applyFilter(); }; };
   onSel('heat-year-set', 'year');
@@ -913,9 +921,67 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     map.showStopHeat(on, HEAT_URL).then(() => { const i = map.stopHeatInfo; if (i) { fill(i); if (st) st.textContent = `${i.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(i)} · built ${i.generated.slice(0, 10)}`; } applyFilter(); })
       .catch(e => { if (st) st.textContent = `Stop history unavailable (${(e as Error).message})`; });
   };
-  const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') !== '0';
+  const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') === '1';
   m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
   applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
+
+  // GPS-only historical activity zones: no automatic scanning, background
+  // notifications, extra GPS watch, or live police-presence claim.
+  const alertsEnabled = ck('history-zone-alerts'), threshold = sel('history-zone-threshold');
+  const currentZone = $('history-zone-current'), banner = $('history-zone-banner');
+  const gate = new ActivityZoneAlertGate();
+  alertsEnabled.checked = localStorage.getItem('pr.historyZones.alerts') !== '0';
+  threshold.value = localStorage.getItem('pr.historyZones.threshold') === 'high' ? 'high' : 'very-high';
+  const levelNames: Record<ActivityLevel, string> = {
+    'very-high': 'Very High', high: 'High', typical: 'Typical', low: 'Low', insufficient: 'Insufficient Data',
+  };
+  let zoneTimer: number | undefined, lastZoneCheck = 0, zoneRequest = 0;
+  let previousArea: string | null = null, zoneIndex: StopHeatIndex | undefined;
+  const clearZoneBanner = () => { clearTimeout(zoneTimer); banner.hidden = true; };
+  alertsEnabled.onchange = () => {
+    localStorage.setItem('pr.historyZones.alerts', alertsEnabled.checked ? '1' : '0');
+    if (!alertsEnabled.checked) clearZoneBanner();
+    gate.resetPosition();
+    applyFilter();
+  };
+  threshold.onchange = () => { localStorage.setItem('pr.historyZones.threshold', threshold.value); gate.resetPosition(); };
+  checkHistoricalZone = async (lat, lng, accuracy) => {
+    if (!document.body.dataset.experience || !Number.isFinite(accuracy) || accuracy > 150 || document.hidden) return;
+    const now = Date.now();
+    if (now - lastZoneCheck < 8_000) return;
+    lastZoneCheck = now;
+    const request = ++zoneRequest;
+    try {
+      const zone: ActivityZone | null = await map.historicalZoneAt(lat, lng, HEAT_URL);
+      if (request !== zoneRequest || !document.body.dataset.experience) return;
+      const idx = map.stopHeatInfo;
+      if (idx && zoneIndex !== idx) {
+        zoneIndex = idx;
+        fill(idx);
+        if (st) st.textContent = `${idx.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(idx)} · built ${idx.generated.slice(0, 10)}`;
+      }
+      if ((zone?.id ?? null) !== previousArea) clearZoneBanner();
+      previousArea = zone?.id ?? null;
+      currentZone.textContent = zone
+        ? zone.level === 'insufficient'
+          ? `${zone.place || zone.label}: area-level ranking unavailable (only citywide or too few comparable 2025 beats).`
+          : `${zone.label}: ${levelNames[zone.level]} · ${zone.count.toLocaleString()} recorded stops in 2025 · ranked among ${zone.comparable} local beats/districts.`
+        : 'No comparable 2025 beat-level records at this location. Not classified as Low.';
+      if (!gate.enter(zone, alertsEnabled.checked, threshold.value === 'high', now)) return;
+      // Keep the screen quiet if a settings panel or search dialog is open.
+      if ($('settings').classList.contains('open') || !navSearchScreen.hidden) return;
+      banner.dataset.level = zone!.level;
+      $('history-zone-title').textContent = `${levelNames[zone!.level]} historical activity`;
+      $('history-zone-detail').textContent = `${zone!.place} · ${zone!.count.toLocaleString()} stops in 2025 (${zone!.label})`;
+      banner.hidden = false;
+      clearTimeout(zoneTimer);
+      zoneTimer = window.setTimeout(() => { banner.hidden = true; }, 7_000);
+    } catch {
+      currentZone.textContent = 'Historical activity information unavailable. No zone rating inferred.';
+      clearZoneBanner();
+    }
+  };
+
   void (async () => {
     // Android install-date founders unlock immediately and offline; the web never does.
     const hint = await loadProEntitlement({
