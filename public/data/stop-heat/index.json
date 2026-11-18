@@ -1845,5 +1845,31 @@
   "cells": 183115
  },
  "counting_note": "Accepted source stop records, not a verified count of unique encounters across all publishers. The Stanford Chicago series deduplicates identical public attributes only. Urbana counts are incident numbers shaded on the city boundary, not 150 m cells. CPD 2025 counts reported rows, including possible repeats. Springfield and Champaign 2025 count reported rows.",
- "subscription": "not-gated"
+ "subscription": "not-gated",
+ "beatBounds": {
+  "beats/urbana_ivc.json": [
+   -88.23397,
+   40.07287,
+   -88.15306,
+   40.15734
+  ],
+  "beats/cpd_2025.json": [
+   -87.94011,
+   41.64455,
+   -87.52414,
+   42.02303
+  ],
+  "beats/spd_2025.json": [
+   -89.77214,
+   39.65317,
+   -89.56843,
+   39.87425
+  ],
+  "beats/champaign_2025.json": [
+   -88.33535,
+   40.0619,
+   -88.22123,
+   40.16396
+  ]
+ }
 }

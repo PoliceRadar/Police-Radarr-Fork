@@ -10,7 +10,7 @@ const boundary = 'https://data.cityofchicago.org/resource/n9it-hstw.geojson?$lim
 // The public, audited aggregate doubles as the offline input for standard full rebuilds.
 // Source indices are positional, so always assign them using the new build's registry.
 export function appendIllinois2025(index, collection = JSON.parse(readFileSync(
-    new URL('../public/data/stop-heat/beats/cpd_2025.json', import.meta.url), 'utf8'))) {
+    new URL('../data/stop-heat/reviewed-beats/cpd_2025.json', import.meta.url), 'utf8'))) {
     if (index.sources.some(s => s.id === id) || index.beatFiles.includes(beatPath))
         throw Error('Chicago 2025 already included');
     for (const source of index.sources) {
@@ -85,7 +85,7 @@ function creditMunicipal2025(index) {
 }
 
 export function appendSpringfield2025(index, collection = JSON.parse(readFileSync(
-    new URL('../public/data/stop-heat/beats/spd_2025.json', import.meta.url), 'utf8'))) {
+    new URL('../data/stop-heat/reviewed-beats/spd_2025.json', import.meta.url), 'utf8'))) {
     const id = 'spd_2025';
     const beatPath = 'beats/spd_2025.json';
     if (index.sources.some(s => s.id === id) || index.beatFiles.includes(beatPath))
@@ -120,7 +120,7 @@ export function appendSpringfield2025(index, collection = JSON.parse(readFileSyn
 }
 
 export function appendChampaign2025(index, collection = JSON.parse(readFileSync(
-    new URL('../public/data/stop-heat/beats/champaign_2025.json', import.meta.url), 'utf8'))) {
+    new URL('../data/stop-heat/reviewed-beats/champaign_2025.json', import.meta.url), 'utf8'))) {
     const id = 'champaign_2025';
     const beatPath = 'beats/champaign_2025.json';
     if (index.sources.some(s => s.id === id) || index.beatFiles.includes(beatPath))

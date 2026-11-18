@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { countBuckets, filterCaption, heatPaint, heatPopup, topReasons, YEAR_BASE, BUCKET } from './stopHeatLayer';
+import { type HeatCell, OPEN_FILTER, beatFilesFor, cellTotals, countBuckets, evictKeys, filterCaption, heatPaint, heatPopup, topReasons, YEAR_BASE, BUCKET } from './stopHeatLayer';
 // @ts-expect-error untyped build script
 import { GRID_M, classifyReason, makeStop, snap, packBucket, HeatAgg, BeatSet, serialize, assertOutputClean, reasonIndex } from '../../scripts/stop-heat-lib.mjs';
 
@@ -170,5 +170,36 @@ describe('stop heat processed files', () => {
     expect(idx.disclaimer).toMatch(/citywide total/);
     expect(idx.coverage.occupied_cell_us_area_percent).toBeLessThan(1);
     expect(idx.coverage.point_area_m2).toBe(0);
+  });
+});
+
+describe('stop heat loading budget', () => {
+  it('fetches only beat files whose recorded bounds touch the view', () => {
+    const idx = { beatFiles: ['beats/a.json', 'beats/b.json', 'beats/old.json'], beatBounds: { 'beats/a.json': [-88, 41, -87, 42], 'beats/b.json': [-90, 39, -89, 40] } as Record<string, [number, number, number, number]> };
+    expect(beatFilesFor(idx, { south: 41.5, west: -87.8, north: 41.9, east: -87.5 })).toEqual(['beats/a.json', 'beats/old.json']);
+    expect(beatFilesFor({ beatFiles: idx.beatFiles }, { south: 0, west: 0, north: 1, east: 1 })).toEqual(idx.beatFiles);
+  });
+  it('index records bounds for every shipped beat file', () => {
+    const idx = JSON.parse(readFileSync('public/data/stop-heat/index.json', 'utf8'));
+    expect(Object.keys(idx.beatBounds).sort()).toEqual([...idx.beatFiles].sort());
+    expect(beatFilesFor(idx, { south: 41.85, west: -87.65, north: 41.9, east: -87.6 })).toEqual(['beats/cpd_2025.json']);
+  });
+  it('evicts least recently used tiles but never the ones on screen', () => {
+    const keys = Array.from({ length: 15 }, (_, i) => `k${i}`);
+    expect(evictKeys(keys, new Set(['k0', 'k1']), () => 1, 12)).toEqual(['k2', 'k3', 'k4']);
+    expect(evictKeys(keys.slice(0, 5), new Set(), () => 1, 12)).toEqual([]);
+    const cells: Record<string, number> = { a: 12_000, b: 12_000, c: 12_000, d: 500 };
+    expect(evictKeys(['a', 'b', 'c', 'd'], new Set(['c', 'd']), k => cells[k], 12, 30_000)).toEqual(['a']);
+    expect(evictKeys(['a', 'b'], new Set(['a', 'b']), k => cells[k], 1, 1)).toEqual([]);
+  });
+  it('memoises per-cell totals per filter and matches countBuckets', () => {
+    const tile = JSON.parse(readFileSync('public/data/stop-heat/tiles/41.75_-87.75.json', 'utf8')) as HeatCell[];
+    const f = { year: 2015, tod: 2, dow: 3 };
+    const a = cellTotals(tile, f);
+    expect(cellTotals(tile, f)).toBe(a);
+    for (let i = 0; i < tile.length; i += 97) expect(a[i]).toBe(countBuckets(tile[i][3], tile[i][4], f).n);
+    const open = cellTotals(tile, OPEN_FILTER);
+    expect(open).not.toBe(a);
+    expect(open.reduce((s, n) => s + n, 0)).toBeGreaterThan(a.reduce((s, n) => s + n, 0));
   });
 });

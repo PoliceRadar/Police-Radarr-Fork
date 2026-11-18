@@ -14,6 +14,8 @@ export interface StopHeatIndex {
   generated: string; gridM: number; tileDeg: number; yearBase: number; years: number[];
   tod: HeatTod[]; dow: string[]; reasons: string[]; disclaimer: string; attribution: string;
   sources: HeatSource[]; notMapped: HeatGap[]; tiles: Record<string, number>; beatFiles: string[];
+  /** [west, south, east, north] per beat file, written by scripts/optimize-stop-heat-beats.mjs. Lets the map skip files off screen. */
+  beatBounds?: Record<string, [number, number, number, number]>;
   totals: { stops: number; mapped: number; unmapped: number; beats: number; cells: number };
   coverage?: { states_with_records: string[]; population_of_jurisdictions: number; occupied_cell_footprint_m2: number; occupied_cell_us_area_percent: number };
 }
@@ -42,6 +44,44 @@ export function heatPaint(n: number) {
 
 export interface HeatCount { n: number; cite: number; warn: number; arrest: number }
 /** b is [pack, count, ...]. o is [pack, cite, warn, arrest, ...]. Pack matches scripts/stop-heat-lib.mjs. */
+/** Cell tiles kept in memory. A dense city tile (~12k cells) parses to ~35 MB of heap, so the cache is bounded
+ *  by tile count and by total cells; tiles on screen are always kept. */
+export const HEAT_TILE_CACHE = 12;
+export const HEAT_CELL_BUDGET = 30_000;
+
+/** Beat files to fetch for a view. Without recorded bounds (older index), every file is needed. */
+export function beatFilesFor(idx: Pick<StopHeatIndex, 'beatFiles' | 'beatBounds'>, b: { south: number; west: number; north: number; east: number }) {
+  return (idx.beatFiles ?? []).filter(f => {
+    const r = idx.beatBounds?.[f];
+    return !r || !(r[2] < b.west || r[0] > b.east || r[3] < b.south || r[1] > b.north);
+  });
+}
+
+/** Least-recently-used keys to drop (`keys` is oldest first) until at most `cap` tiles and `budget` cells remain.
+ *  Keys in `keep` (on screen) are never dropped, even if that leaves the cache over budget. */
+export function evictKeys(keys: Iterable<string>, keep: ReadonlySet<string>, cells: (k: string) => number = () => 0, cap = HEAT_TILE_CACHE, budget = HEAT_CELL_BUDGET) {
+  const all = [...keys]; const out: string[] = [];
+  let count = all.length, total = all.reduce((n, k) => n + cells(k), 0);
+  for (const k of all) {
+    if (count <= cap && total <= budget) break;
+    if (keep.has(k)) continue;
+    out.push(k); count--; total -= cells(k);
+  }
+  return out;
+}
+
+/** Stop totals per cell for one filter, memoised per tile array so panning with the same filter is free. */
+const cellMemo = new WeakMap<HeatCell[], { key: string; n: Int32Array }>();
+export function cellTotals(tile: HeatCell[], f: HeatFilter, yearBase = YEAR_BASE): Int32Array {
+  const key = `${f.year}|${f.tod}|${f.dow}|${yearBase}`;
+  const hit = cellMemo.get(tile);
+  if (hit && hit.key === key) return hit.n;
+  const n = new Int32Array(tile.length);
+  for (let i = 0; i < tile.length; i++) n[i] = countBuckets(tile[i][3], undefined, f, yearBase).n;
+  cellMemo.set(tile, { key, n });
+  return n;
+}
+
 export function countBuckets(b: number[], o: number[] | undefined, f: HeatFilter, yearBase = YEAR_BASE): HeatCount {
   const oc = new Map<number, [number, number, number]>();
   if (o) for (let i = 0; i + 3 < o.length; i += 4) oc.set(o[i], [o[i + 1], o[i + 2], o[i + 3]]);
