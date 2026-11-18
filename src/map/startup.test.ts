@@ -23,6 +23,7 @@ describe('initial map viewport', () => {
     expect(new URL('https://localhost' + config.server.appStartPath).pathname).toBe('/v2/index.html');
     const html = readFileSync('.' + config.server.appStartPath, 'utf8');
     expect(html).toContain('/src/v2/main.ts'); expect(html).not.toContain('/src/main.ts');
+    expect(html).not.toContain('Classic UI');
     expect(config.server.url).toBeUndefined();
   });
 });

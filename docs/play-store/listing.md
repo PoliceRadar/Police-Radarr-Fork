@@ -19,3 +19,6 @@ How it works
 
 Limitations
 Bluetooth range is about 100–150 m. Matches are probabilistic and many devices broadcast nothing. Do not rely on the app for safety decisions. Always follow the law and the directions of public-safety personnel. Do not use the app while driving.
+
+## Screenshots
+Upload the current UI only: `screenshots/01-map-dispatch.png` and `screenshots/02-map-mock.png`. The retired Classic UI is not part of the listing.

@@ -7,7 +7,7 @@ A modular Vite + TypeScript web app (PWA-friendly, so it can be wrapped with Cap
 ## Quick start
 ```bash
 npm install
-npm run dev     # open the printed URL; Mock backend is the default
+npm run dev     # open the printed URL; it redirects to /v2/index.html. Mock backend is the default
 npm run build
 ```
 Mock mode sends simulated advertisements, including non-matching "noise", every 1.5 s. The demo points are scattered around your coarse location, or around Chicago if geolocation is denied.
@@ -16,6 +16,9 @@ Mock mode sends simulated advertisements, including non-matching "noise", every 
 - Use Chrome on Android or desktop over HTTPS or localhost, and enable `chrome://flags/#enable-experimental-web-platform-features`. That turns on `navigator.bluetooth.requestLEScan`, which scans continuously.
 - Without the flag, the app falls back to `requestDevice({acceptAllDevices})` plus `watchAdvertisements()`. That only watches **one device you pick by hand**, so it is a demo rather than a detector.
 - iOS Safari has no Web Bluetooth. For reliable background scanning you need a native wrapper (Capacitor + a BLE plugin).
+
+## Interface
+The only UI is `v2/index.html` (`src/v2/main.ts`). The site root (`index.html`) redirects to that document and keeps the query string and hash, so `/v2/` bookmarks and links such as `?backend=`, `?notour=1`, `#settings`, and `#chat` still open the same page. The Android app still starts at `/v2/index.html`. Shared scanning, map, and fusion code stays in `src/`.
 
 ## Architecture
 ```

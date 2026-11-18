@@ -154,7 +154,6 @@ details.group{margin-top:14px}
 .mono{font:11px/1.4 ui-monospace,Menlo,monospace;color:var(--mut);white-space:pre-wrap;word-break:break-all;margin:6px 0}
 .log{list-style:none;padding:0;margin:0;font-size:12px;max-height:240px;overflow:auto}
 .log li{border-left:3px solid;padding:4px 8px;margin-bottom:4px;background:rgba(255,255,255,.03);border-radius:0 6px 6px 0}
-.links{text-align:center}.links a{color:var(--link);text-decoration:none;font-weight:600}
 .recorder{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px;font-size:13px}
 .recorder button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:inherit}
 .recorder .rec-btn.on{background:var(--acc);border-color:var(--acc);color:#fff}

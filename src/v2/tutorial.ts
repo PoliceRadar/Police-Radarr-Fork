@@ -1,4 +1,4 @@
-/** Optional first-run walkthrough (v2). Shown on the first Patrol Radar entry, not the mode picker. Skippable; a saved flag stops it re-appearing. */
+/** Optional first-run walkthrough. Shown on the first Patrol Radar entry, not the mode picker. Skippable; a saved flag stops it re-appearing. */
 export interface TutorialStep { id: string; title: string; body: string; target?: string }
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 export const TUTORIAL_KEY = 'pr.tutorial.done';
