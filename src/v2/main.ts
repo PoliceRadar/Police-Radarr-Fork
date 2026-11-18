@@ -36,8 +36,9 @@ import { nativeAppPresent, applyPlatformSettings } from './platform';
 import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
-import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
-import { PlayProClient, type ProStatus } from '../entitlement/playBilling';
+import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
+import { PlayProClient, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
+import { cachedProValid, effectiveAccess, saveVerifiedStatus } from '../entitlement/proAccess';
 
 // A single map and BLE scanning session serve Patrol and Navigation.
 // The destination picker is a separate full-screen view; a chosen route launches the driving HUD.
@@ -780,14 +781,17 @@ let applyTrafficCamEntitlement = () => {};
 mountIllinoisDirectory(document.querySelector<HTMLDetailsElement>('#illinois-agencies'));
 const HEAT_URL = `${import.meta.env.BASE_URL}data/stop-heat/`;
 const HEAT_FILTER_KEY = 'pr.stopheat.filter';
-// No local value grants Pro. Even founding-tester hints only change the onboarding controls.
+// Effective Pro = Android install-date founder OR server-verified Pro OR (server unreachable) the cached
+// server-verified status. Founders keep Pro offline and when Supabase is down. Web never gets Pro.
 { const ck = (id: string) => document.getElementById(id) as HTMLInputElement;
   const sel = (id: string) => document.getElementById(id) as HTMLSelectElement;
   const page = $('heat-settings'), st = document.getElementById('heat-status'), sum = document.getElementById('heat-summary');
   const openHeat = (o: boolean) => { page.classList.toggle('open', o); page.setAttribute('aria-hidden', String(!o)); };
-  let hasVerifiedPro = false;
+  const proPlatform = nativePlugin() ? 'android' : 'web';
+  let hasVerifiedPro = false; // effective Pro on this device (see proAccess.ts)
   let foundingTester = false;
-  let legacyFounderHint = false;
+  let localFounder = false;
+  let serverStatus: ProStatus | null = null;
   let founderChecked = false;
   let proClient: PlayProClient | undefined;
   let purchaseAvailable = false;
@@ -801,15 +805,24 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   const restore = $('pro-restore') as HTMLButtonElement;
   const activate = $('founder-activate') as HTMLButtonElement;
   const setBillingMessage = (msg: string) => { billingStatus.textContent = msg; };
-  const applyVerified = (status: ProStatus) => {
-    hasVerifiedPro = status.pro;
-    foundingTester = status.foundingTester;
-    trafficCamerasPro = status.pro;
+  const applyAccess = () => {
+    const access = effectiveAccess({
+      platform: proPlatform, localFounder, server: serverStatus,
+      cached: serverStatus ? null : cachedProValid(localStorage, proPlatform),
+    });
+    hasVerifiedPro = access.pro;
+    foundingTester = access.foundingTester;
+    trafficCamerasPro = access.pro;
     presentPro();
     applyFilter();
     applyTrafficCamEntitlement();
-    setBillingMessage(status.foundingTester ? 'Founding tester: complimentary Pro confirmed.' :
-      status.pro ? 'Pro active and verified with Google Play.' : 'Free preview active.');
+  };
+  const applyVerified = (status: RestoreResult) => {
+    serverStatus = status;
+    saveVerifiedStatus(localStorage, status);
+    applyAccess();
+    setBillingMessage(status.notice ?? (foundingTester ? 'Founding tester: complimentary Pro confirmed.' :
+      hasVerifiedPro ? 'Pro active and verified with Google Play.' : 'Free preview active.'));
   };
   const filterNote = document.getElementById('heat-filter-note');
   const presentPro = () => {
@@ -818,15 +831,16 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
       field.disabled = !hasVerifiedPro;
       field.setAttribute('aria-label', (proLabels.get(field) ?? '') + (hasVerifiedPro ? '' : ' (Pro subscription required)'));
     }
-    if (offer) offer.hidden = !nativePlugin() || !founderChecked || hasVerifiedPro || legacyFounderHint;
-    founderClaim.hidden = hasVerifiedPro || !legacyFounderHint;
-    upgrade.disabled = !purchaseAvailable || !proClient || hasVerifiedPro || legacyFounderHint;
+    if (offer) offer.hidden = !nativePlugin() || !founderChecked || hasVerifiedPro;
+    // Fallback for founders whose reinstall could not be recovered automatically.
+    founderClaim.hidden = hasVerifiedPro || !nativePlugin() || !founderChecked;
+    upgrade.disabled = !purchaseAvailable || !proClient || hasVerifiedPro;
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
     if (filterNote) filterNote.hidden = hasVerifiedPro;
   };
   presentPro();
   upgrade.onclick = () => {
-    if (!proClient || legacyFounderHint || hasVerifiedPro) return;
+    if (!proClient || hasVerifiedPro) return;
     setBillingMessage('Opening Google Play checkout…');
     void proClient.purchase().catch(e => setBillingMessage((e as Error).message));
   };
@@ -889,26 +903,34 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
   applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
   void (async () => {
-    // Legacy install-date checks are ONLY a hint to avoid showing a Subscribe button
-    // to existing founding testers. They can never unlock paid content.
+    // Android install-date founders unlock immediately and offline; the web never does.
     const hint = await loadProEntitlement({
       platform: nativePlugin() ? 'android' : 'web',
       readInstallTime: () => readNativeFirstInstallTime(nativePlugin()),
       storage: localStorage,
     });
-    legacyFounderHint = hint.foundingTester;
+    localFounder = hint.foundingTester;
     founderChecked = true;
-    presentPro();
+    applyAccess(); // founders and cached subscribers are unlocked before any network call
     if (!nativePlugin()) { setBillingMessage('Subscriptions are available in the Android app only.'); return; }
+    if (localFounder) setBillingMessage('Founding tester: Pro unlocked on this phone.');
     try {
       proClient = await PlayProClient.create();
       await proClient.listen(applyVerified, setBillingMessage);
       // Catch purchases completed while the app was backgrounded or killed.
-      let status: ProStatus;
+      let status: RestoreResult;
       try { status = await proClient.restore(); }
       catch { status = await proClient.status(); } // Still show previously verified Pro if Play temporarily disconnects.
+      if (!status.foundingTester && (localFounder || !status.pro)) {
+        // Automatic founder migration (records a permanent server grant) and same-phone reinstall recovery.
+        try {
+          const installMs = parseInstallTime(await readNativeFirstInstallTime(nativePlugin()));
+          const claimed = await proClient.claimFounderInstall(installMs);
+          if (claimed.pro) status = claimed;
+        } catch { /* local founder unlock still applies; retried next launch */ }
+      }
       applyVerified(status);
-      if (!foundingTester && !legacyFounderHint) {
+      if (!hasVerifiedPro) {
         const product = await proClient.getProduct();
         if (product.productId === 'patrol_radar_pro' && product.basePlanId === 'monthly') {
           $('pro-price').textContent = product.price + '/month';
@@ -917,7 +939,9 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
         }
       }
     } catch (error) {
-      setBillingMessage((error as Error).message);
+      // Verifier or Play unreachable: founder and cached Pro (applied above) stay unlocked.
+      setBillingMessage(foundingTester ? 'Founding tester: Pro unlocked on this phone.' :
+        hasVerifiedPro ? 'Pro active (offline; last verified with Google Play).' : (error as Error).message);
       upgrade.disabled = true;
     }
   })();

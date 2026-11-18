@@ -8,16 +8,23 @@ const server = readFileSync('supabase/functions/_shared/store.ts', 'utf8');
 const verifier = readFileSync('supabase/functions/_shared/play.ts', 'utf8');
 const sql = readFileSync('supabase/migrations/20261117000000_play_pro_entitlements.sql', 'utf8');
 const ownershipSql = readFileSync('supabase/migrations/20261118000000_pro_purchase_owner_immutable.sql', 'utf8');
+const founderSql = readFileSync('supabase/migrations/20261119000000_pro_founder_auto_claim_and_relink.sql', 'utf8');
+const endpoint = readFileSync('supabase/functions/pro-entitlement/index.ts', 'utf8');
+const billingClient = readFileSync('src/entitlement/playBilling.ts', 'utf8');
 
 describe('Play subscription security boundaries', () => {
-  it('never upgrades Pro from Android callback or local install/grant flag', () => {
+  it('never upgrades Pro from the Android purchase callback; only founders, server or cached server status', () => {
     expect(app).toContain('status = await proClient.restore()');
     expect(app).toContain('applyVerified(status)');
     expect(app).toContain('void proClient.purchase()');
-    expect(app).not.toContain('hasVerifiedPro = entitlement.pro');
-    expect(app).toContain('hasVerifiedPro = status.pro');
-    expect(app).toContain('trafficCamerasPro = status.pro');
-    expect(app).not.toContain('trafficCamerasPro = entitlement.pro');
+    expect(app).toContain('const access = effectiveAccess({');
+    expect(app).toContain('hasVerifiedPro = access.pro');
+    expect(app).toContain('trafficCamerasPro = access.pro');
+    expect(app).toContain('localFounder = hint.foundingTester');
+    expect(app).toContain('saveVerifiedStatus(localStorage, status)');
+    // Founder/cached unlock is applied before PlayProClient.create can fail.
+    expect(app.indexOf('applyAccess(); // founders')).toBeLessThan(app.indexOf('proClient = await PlayProClient.create()'));
+    expect(app).toContain('proClient.claimFounderInstall(installMs)');
     expect(app).toContain('applyTrafficCamEntitlement();');
     expect(app).toContain('tcAlerter.check(f, cams, tcSet, travel().mode, trafficCamerasPro)');
     expect(plugin).not.toContain('SharedPreferences');
@@ -42,8 +49,10 @@ describe('Play subscription security boundaries', () => {
     expect(sql).toContain('create table if not exists public.pro_founders');
     expect(server).toContain("source: 'founder'");
     expect(server).toContain('acknowledgeSubscription');
-    expect(server).toContain('owner = linked.user_id');
-    expect(server).toContain('owner !== presentedBy');
+    expect(server).toContain('decideOwnership({');
+    expect(server).toContain("db.rpc('relink_pro_purchase'");
+    expect(server).toContain('isOwnershipRaceError(error.message) ? LINKED_ELSEWHERE');
+    expect(server).not.toContain('30 * 60_000');
     expect(ownershipSql).toContain('old.user_id is distinct from new.user_id');
     expect(ownershipSql).toContain('before update of user_id');
   });
@@ -52,4 +61,25 @@ describe('Play subscription security boundaries', () => {
     expect(rtdn).toContain('verifyPubSubPush(req)');
     expect(rtdn).toContain('await refreshToken(token)');
   });
+  it('keeps purchases and founder grants when an auth user is deleted, and only verified relinks move owners', () => {
+    expect(founderSql).toContain('on delete restrict');
+    expect(founderSql).not.toMatch(/references auth\.users\(id\) on delete cascade/i);
+    expect(founderSql).toContain("current_setting('patrolradar.pro_relink', true)");
+    expect(founderSql).toContain('where token_sha256 = p_token_sha256 and user_id = p_from');
+    expect(founderSql).toMatch(/revoke all on function public.relink_pro_purchase[^;]+from PUBLIC, anon, authenticated/);
+    expect(founderSql).toMatch(/revoke all on function public.claim_pro_founder_install[^;]+from PUBLIC, anon, authenticated/);
+    expect(founderSql).toContain("timestamptz '2026-11-16 19:54:00-06'");
+  });
+  it('sets an obfuscated checkout account id and surfaces linked-elsewhere errors', () => {
+    expect(plugin).toContain('flow.setObfuscatedAccountId(account)');
+    expect(plugin).toContain('Settings.Secure.ANDROID_ID');
+    expect(plugin).toContain('MessageDigest.getInstance("SHA-256")');
+    expect(endpoint).toContain("json(409, { error: LINKED_ELSEWHERE_HELP, code: 'linked_elsewhere' })");
+    expect(endpoint).toContain("body.action === 'founder-install'");
+  });
+  it('uses a billing-only auth session, not the chat session', () => {
+    expect(billingClient).toContain("PRO_AUTH_STORAGE_KEY = 'pr.pro.auth'");
+    expect(billingClient).not.toContain("'pr.chat.auth'");
+  });
 });
+
