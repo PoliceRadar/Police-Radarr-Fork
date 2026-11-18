@@ -1,4 +1,4 @@
-/** One collapsible, categorised map legend shared by v1 and v2. Only open/closed state is stored locally. */
+/** One collapsible, categorised map legend. Only open/closed state is stored locally. */
 export const LEGEND_KEY = 'pr.legend.v1';
 interface Item { sw: string; label: string }
 export interface LegendCat { id: string; title: string; items: Item[] }

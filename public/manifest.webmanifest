@@ -1,7 +1,8 @@
 {
  "name": "Patrol Radar (passive)",
  "short_name": "PatrolRadar",
- "start_url": ".",
+ "start_url": "./v2/index.html",
+ "scope": "./",
  "display": "standalone",
  "background_color": "#000000",
  "theme_color": "#000000",

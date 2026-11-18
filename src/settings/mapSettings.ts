@@ -1,4 +1,4 @@
-/** Shared wiring for travel mode, 3D view (v1 + v2). Only the choices are stored locally. */
+/** Shared wiring for travel mode and 3D view. Only the choices are stored locally. */
 import { loadTravelMode, setTravelMode, type TravelMode } from './travelMode';
 import type { MapView } from '../map/mapView';
 export const MAP3D_KEY = 'pr.map3d';

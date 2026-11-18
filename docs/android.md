@@ -1,7 +1,9 @@
 # Patrol Radar Android app
 
-The Android app wraps the v2 map in Capacitor and adds a **native, passive BLE scanner** that runs in a
-foreground service, so scanning keeps going with the screen off or the phone in a pocket.
+The Android app wraps the map in Capacitor and adds a **native, passive BLE scanner** that runs in a
+foreground service, so scanning keeps going with the screen off or the phone in a pocket. It starts at
+`/v2/index.html` (`server.appStartPath`). The public site root redirects to that same document and keeps
+the query string and hash.
 
 **Download (always the latest build):**
 https://github.com/missionaryj/patrol-radar/releases/download/android-latest/patrol-radar-debug.apk

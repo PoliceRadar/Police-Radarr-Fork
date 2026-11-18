@@ -19,7 +19,7 @@ Everything in the app is ready; chat shows "Chat not configured" until these ste
 ## 4. Connect the app
 8. **Project Settings → API** (or **Connect**): copy the **Project URL** and the **anon / publishable** key. Both are public by design; never use the `service_role` / secret key in the app.
 9. Local: copy `.env.example` to `.env.local` and fill them in. Pages deploy: add them as GitHub Actions secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (repo → Settings → Secrets and variables → Actions) and pass them as `env:` to the `npm run build` step. Android: build with the same `.env.local` present, then `npx cap sync android` and a new AAB.
-10. **Authentication → URL Configuration**: Site URL `https://missionaryj.github.io/patrol-radar/` (anonymous sign-in doesn't redirect, but set it anyway).
+10. **Authentication → URL Configuration**: Site URL `https://missionaryj.github.io/patrol-radar/` (anonymous sign-in doesn't redirect, but set it anyway). That root immediately opens `/v2/index.html` and keeps the query string and hash.
 
 ## 5. Moderating (SQL Editor; the `moderation` schema isn't reachable from the app)
 ```sql
