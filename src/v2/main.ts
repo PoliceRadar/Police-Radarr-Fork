@@ -37,6 +37,7 @@ import { nativeAppPresent, applyPlatformSettings } from './platform';
 import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
+import { ActivityZoneAlertGate, activityLevelLabel, considerHistoricalZoneNotice, historicalZoneStatus, zoneAlertsSavedOn, HISTORICAL_ZONE_PRO_NOTE, type ActivityZone } from '../map/historicalZones';
 import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
 import { PlayProClient, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
 import { cachedProValid, effectiveAccess, saveVerifiedStatus } from '../entitlement/proAccess';
@@ -416,6 +417,7 @@ const drawLiveSoon = () => { if (liveTimer !== undefined) return; liveTimer = wi
 setInterval(drawLive, 2000);
 { const other = document.getElementById('showother') as HTMLInputElement | null;
   if (other) { other.checked = localStorage.getItem('pr.showother') === '1'; other.addEventListener('change', () => { localStorage.setItem('pr.showother', other.checked ? '1' : '0'); drawLive(); }); } }
+let checkHistoricalZone = (_lat: number, _lng: number, _accuracy: number): Promise<void> | void => {};
 function startGeo() {
   if (!navigator.geolocation) { map.locationUnavailable(); $('geo').textContent = 'Location unavailable'; return; }
   if (geoWatch !== undefined) navigator.geolocation.clearWatch(geoWatch);
@@ -424,6 +426,7 @@ function startGeo() {
     here = { lat: p.coords.latitude, lng: p.coords.longitude }; drawLive();
     updateActiveGuidance(here, p.coords.accuracy, p.coords.speed);
     void checkTrafficCams({ lat: p.coords.latitude, lng: p.coords.longitude, speed: p.coords.speed, heading: p.coords.heading, t: p.timestamp });
+    void checkHistoricalZone(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
     recorder.fix(p.coords.accuracy, here);
     pos = coarsen(p.coords.latitude, p.coords.longitude);
     $('geo').textContent = `Location ±${Math.round(p.coords.accuracy)} m`;
@@ -431,6 +434,7 @@ function startGeo() {
     map.locationUnavailable();
     recorder.event(err.code === err.PERMISSION_DENIED ? 'location-denied' : 'location-error', undefined, err.message);
     $('geo').textContent = err.code === err.PERMISSION_DENIED ? 'Location denied: allow it for this site, then tap ◎' : `Location error: ${err.message}`;
+    $('history-zone-current').textContent = 'Location unavailable: historical activity zones need GPS.';
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 });
 }
 startGeo();
@@ -839,6 +843,9 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
       hasVerifiedPro ? 'Pro active and verified with Google Play.' : 'Free preview active.'));
   };
   const filterNote = document.getElementById('heat-filter-note');
+  // Assigned once the zone controls exist. Verification, restore, and founder activation all call presentPro.
+  let applyZoneNoticeAccess = () => {};
+  let zoneNoticePro: boolean | null = null;
   const presentPro = () => {
     map.setStopHeatPreview(!hasVerifiedPro);
     for (const field of proFields) {
@@ -851,6 +858,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     upgrade.disabled = !purchaseAvailable || !proClient || hasVerifiedPro;
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
     if (filterNote) filterNote.hidden = hasVerifiedPro;
+    applyZoneNoticeAccess();
   };
   presentPro();
   upgrade.onclick = () => {
@@ -903,7 +911,12 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   const applyFilter = () => {
     try { localStorage.setItem(HEAT_FILTER_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
     sync(); map.setStopHeatFilter(hasVerifiedPro ? saved : { year: null, tod: null, dow: null });
-    if (sum) sum.textContent = !ck('stopheat').checked ? 'Hidden' : !hasVerifiedPro ? 'Free preview · Pro filters locked' : saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
+    if (sum) {
+      const shading = !ck('stopheat').checked ? 'Shading off' : !hasVerifiedPro ? 'Free preview · Pro filters locked' :
+        saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
+      const zoneBit = !hasVerifiedPro ? 'Zone notices Pro' : `Zone notices ${ck('history-zone-alerts').checked ? 'on' : 'off'}`;
+      sum.textContent = `${shading} · ${zoneBit}`;
+    }
   };
   const onSel = (id: string, kind: 'year' | 'tod' | 'dow') => { sel(id).onchange = () => { if (!hasVerifiedPro) return; saved = { ...saved, [kind]: read(sel(id)) }; applyFilter(); }; };
   onSel('heat-year-set', 'year');
@@ -913,9 +926,113 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     map.showStopHeat(on, HEAT_URL).then(() => { const i = map.stopHeatInfo; if (i) { fill(i); if (st) st.textContent = `${i.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(i)} · built ${i.generated.slice(0, 10)}`; } applyFilter(); })
       .catch(e => { if (st) st.textContent = `Stop history unavailable (${(e as Error).message})`; });
   };
-  const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') !== '0';
+  const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') === '1';
   m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
   applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
+
+  // GPS-only historical activity zones: no automatic scanning, background
+  // notifications, extra GPS watch, or live police-presence claim.
+  // Notices use the same verified Pro as Stop History filters (hasVerifiedPro / effectiveAccess). Web never grants Pro.
+  // School-zone and work-zone camera alerts stay free and are not decided here.
+  const alertsEnabled = ck('history-zone-alerts'), threshold = sel('history-zone-threshold');
+  const currentZone = $('history-zone-current'), banner = $('history-zone-banner');
+  const zoneProNote = document.getElementById('history-zone-pro-note');
+  const gate = new ActivityZoneAlertGate();
+  alertsEnabled.checked = zoneAlertsSavedOn(localStorage.getItem('pr.historyZones.alerts'));
+  threshold.value = localStorage.getItem('pr.historyZones.threshold') === 'high' ? 'high' : 'very-high';
+  let zoneTimer: number | undefined, lastZoneCheck = 0, zoneRequest = 0;
+  let previousArea: string | null = null, zoneIndex: StopHeatIndex | undefined;
+  const clearZoneBanner = () => { clearTimeout(zoneTimer); banner.hidden = true; };
+  const zoneControlLabel = (base: string) => base + (hasVerifiedPro ? '' : ' (Pro subscription required)');
+  applyZoneNoticeAccess = () => {
+    const pro = hasVerifiedPro;
+    alertsEnabled.disabled = !pro;
+    threshold.disabled = !pro;
+    alertsEnabled.setAttribute('aria-label', zoneControlLabel('Historical activity zone alerts'));
+    threshold.setAttribute('aria-label', zoneControlLabel('Historical activity zone threshold'));
+    if (pro) {
+      alertsEnabled.removeAttribute('aria-describedby');
+      threshold.removeAttribute('aria-describedby');
+    } else {
+      alertsEnabled.setAttribute('aria-describedby', 'heat-pro-offer');
+      threshold.setAttribute('aria-describedby', 'heat-pro-offer');
+      currentZone.textContent = HISTORICAL_ZONE_PRO_NOTE;
+      clearZoneBanner();
+    }
+    if (zoneProNote) {
+      zoneProNote.hidden = pro;
+      if (!pro) zoneProNote.textContent = nativePlugin()
+        ? 'Included with Patrol Radar Pro. Subscribe or restore with the Pro offer on this page. School-zone and work-zone alerts stay free.'
+        : 'Historical activity zone notices are included with Patrol Radar Pro in the Android app. School-zone and work-zone alerts stay free.';
+    }
+    if (zoneNoticePro !== null && zoneNoticePro !== pro) {
+      gate.resetPosition();
+      lastZoneCheck = 0;
+    }
+    if (pro && currentZone.textContent === HISTORICAL_ZONE_PRO_NOTE)
+      currentZone.textContent = 'Area ranking appears once GPS and local records are available.';
+    zoneNoticePro = pro;
+  };
+  applyZoneNoticeAccess();
+  applyFilter();
+  alertsEnabled.onchange = () => {
+    if (!hasVerifiedPro) { alertsEnabled.checked = zoneAlertsSavedOn(localStorage.getItem('pr.historyZones.alerts')); return; }
+    localStorage.setItem('pr.historyZones.alerts', alertsEnabled.checked ? '1' : '0');
+    if (!alertsEnabled.checked) clearZoneBanner();
+    gate.resetPosition();
+    applyFilter();
+  };
+  threshold.onchange = () => {
+    if (!hasVerifiedPro) return;
+    localStorage.setItem('pr.historyZones.threshold', threshold.value);
+    gate.resetPosition();
+  };
+  // Settings, search, a covering drawer, or the traffic-camera banner all hide this notice.
+  const zoneBannerCanShow = () =>
+    !$('settings').classList.contains('open') &&
+    navSearchScreen.hidden &&
+    !$('heat-settings').classList.contains('open') &&
+    !$('tc-settings').classList.contains('open') &&
+    $('tc-banner').hidden;
+  checkHistoricalZone = async (lat, lng, accuracy) => {
+    if (!document.body.dataset.experience || !Number.isFinite(accuracy) || accuracy > 150 || document.hidden) return;
+    const now = Date.now();
+    if (now - lastZoneCheck < 8_000) return;
+    lastZoneCheck = now;
+    const request = ++zoneRequest;
+    try {
+      const zone: ActivityZone | null = await map.historicalZoneAt(lat, lng, HEAT_URL);
+      if (request !== zoneRequest || !document.body.dataset.experience || document.hidden) return;
+      const idx = map.stopHeatInfo;
+      if (idx && zoneIndex !== idx) {
+        zoneIndex = idx;
+        fill(idx);
+        if (st) st.textContent = `${idx.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(idx)} · built ${idx.generated.slice(0, 10)}`;
+      }
+      if ((zone?.id ?? null) !== previousArea) clearZoneBanner();
+      previousArea = zone?.id ?? null;
+      currentZone.textContent = historicalZoneStatus(zone, hasVerifiedPro);
+      const canShow = zoneBannerCanShow();
+      if (!considerHistoricalZoneNotice(gate, zone, {
+        pro: hasVerifiedPro,
+        savedOn: alertsEnabled.checked,
+        includeHigh: threshold.value === 'high',
+        canShow,
+        now,
+      })) return;
+      if (!zone) return;
+      banner.dataset.level = zone.level;
+      $('history-zone-title').textContent = `${activityLevelLabel(zone.level)} historical activity`;
+      $('history-zone-detail').textContent = `${zone.place} · ${zone.count.toLocaleString()} stops in 2025 (${zone.label})`;
+      banner.hidden = false;
+      clearTimeout(zoneTimer);
+      zoneTimer = window.setTimeout(() => { banner.hidden = true; }, 7_000);
+    } catch {
+      currentZone.textContent = 'Historical activity information unavailable. No zone rating inferred.';
+      clearZoneBanner();
+    }
+  };
+
   void (async () => {
     // Android install-date founders unlock immediately and offline; the web never does.
     const hint = await loadProEntitlement({

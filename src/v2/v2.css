@@ -351,6 +351,19 @@ details.group{margin-top:14px}
 .tcam-speed{background:#f59e0b}.tcam-red_light{background:#ef4444}.tcam-school_zone{background:#eab308}.tcam-work_zone{background:#f97316}.tcam-monitor{background:#64748b}
 .tcam:empty.tcam-speed::after{content:'S'}.tcam:empty.tcam-red_light::after{content:'R'}.tcam:empty.tcam-school_zone::after{content:'Z'}.tcam:empty.tcam-work_zone::after{content:'W'}.tcam:empty.tcam-monitor::after{content:'M'}
 .tc-lbl{display:flex;align-items:center;gap:8px;font-weight:400}
+/* Brief, noninteractive historical-stop notification; distinct from live BLE and camera alerts. */
+.history-zone-banner{position:fixed;z-index:1115;bottom:calc(220px + var(--sb));left:calc(12px + var(--sl));width:min(290px,calc(100vw - 24px - var(--sl) - var(--sr)));padding:10px 13px;border:1px solid var(--line);border-left:4px solid #E6A23C;border-radius:13px;background:var(--panel-solid);color:var(--txt);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.history-zone-banner[hidden]{display:none!important}
+/* Navigation/traffic-camera warnings take priority over historical context. */
+#tc-banner:not([hidden]) + .history-zone-banner{display:none!important}
+.history-zone-banner>small{font-size:10px;line-height:1.25;color:var(--mut)}
+.history-zone-banner>strong{font-size:16px;line-height:1.25}
+.history-zone-banner>span{font-size:12px;line-height:1.35;color:var(--txt)}
+.history-zone-banner[data-level="very-high"]{border-left-color:#E64F59}
+.history-zone-banner[data-level="high"]{border-left-color:#E6A23C}
+body[data-experience="navigation"] .history-zone-banner{top:calc(122px + var(--st));bottom:auto}
+body[data-navigation-driving="true"] .history-zone-banner{top:calc(165px + var(--st))}
+@media (max-height:560px){body[data-experience="patrol"] .history-zone-banner{bottom:calc(195px + var(--sb))}}
 /* Historical stop heat: compact filter bar above the scan button, under the location dot's pane. */
 .heat-bar select,.heat-filters select{font-size:12px;padding:6px 22px 6px 8px;border-radius:9px;min-width:0}
 .heat-disclaimer{margin:6px 0 0;font-size:10.5px;line-height:1.35;color:var(--dim)}

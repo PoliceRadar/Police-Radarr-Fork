@@ -17,6 +17,7 @@ import { PatrolMotion, headingStep, patrolZoom } from './patrolDriving';
 import { type TcIndex, type TcRow, type TcType, TC_ATTRIBUTION, TC_MIN_ZOOM, TC_META, tcInBounds, tcIcon, tcPopup } from './trafficCamLayer';
 import { type HeatCell, type HeatFilter, type StopHeatIndex, HEAT_CELL_CAP, HEAT_GRID_MIN_ZOOM, OPEN_FILTER, STOP_HEAT_ATTRIBUTION, beatFilesFor, cellTotals, countBuckets, evictKeys, heatPaint, heatTilesFor } from './stopHeatLayer';
 import { type FlockCollection, type FlockIndex, FLOCK_ATTRIBUTION, FLOCK_MIN_ZOOM, flockInBounds, tilesFor } from './flockLayer';
+import { activityZoneAt, buildActivityZones, type ActivityZone } from './historicalZones';
 
 /** Hidden Leaflet only needs periodic position sync when MapLibre is the visible renderer. */
 export function shouldSyncLeaflet(active3D: boolean, now: number, last: number): boolean {
@@ -125,6 +126,7 @@ export class MapView {
   private heatTiles = new Map<string, Promise<HeatCell[] | undefined>>();
   /** Beat files are fetched only when their recorded bounds touch the view, then kept (all of them total ~0.5 MB). */
   private heatBeats = new Map<string, Promise<HeatBeatFile>>();
+  private historicalZones = new Map<string, Promise<ActivityZone[]>>();
   private heatLoading?: Promise<void>; private heatDraw = 0; private heatTimer?: number; private heatRenderer!: L.Renderer;
   /** Live dots/rings on one canvas: hundreds of SVG paths rebuilt per refresh janked the map (see scripts/stress). */
   private liveRenderer = L.canvas({ padding: 0.3 });
@@ -400,10 +402,33 @@ export class MapView {
   /** year / time-of-day / weekday. Null means all. Counts are recomputed from the stored buckets. */
   setStopHeatFilter(f: HeatFilter) { this.heatFilter = this.heatPreview ? { ...OPEN_FILTER } : f; if (this.heatOn) void this.drawHeat(); }
   get stopHeatInfo() { return this.heatIdx; }
+  /**
+   * Look up a 2025 historical stop area at the GPS location without turning
+   * shading on. Only city beats/districts are ranked; citywide-only totals
+   * are returned as insufficient data, not as a false localized hotspot.
+   */
+  async historicalZoneAt(lat: number, lng: number, baseUrl: string): Promise<ActivityZone | null> {
+    await this.viewReady;
+    await this.loadHeat(baseUrl);
+    const idx = this.heatIdx;
+    if (!idx) return null;
+    const here = { south: lat, north: lat, west: lng, east: lng };
+    for (const file of beatFilesFor(idx, here)) {
+      let zones = this.historicalZones.get(file);
+      if (!zones) {
+        zones = this.heatBeat(file).then(fc => buildActivityZones(fc.features ?? [], idx.yearBase));
+        zones.catch(() => this.historicalZones.delete(file));
+        this.historicalZones.set(file, zones);
+      }
+      const area = activityZoneAt(await zones, lat, lng);
+      if (area) return area;
+    }
+    return null;
+  }
   private async loadHeat(baseUrl: string) {
     if (this.heatLoading && this.heatBase === baseUrl) return this.heatLoading;
     if (this.heatIdx && this.heatBase === baseUrl) return;
-    this.heatBase = baseUrl; this.heatTiles.clear(); this.heatBeats.clear();
+    this.heatBase = baseUrl; this.heatTiles.clear(); this.heatBeats.clear(); this.historicalZones.clear();
     this.heatLoading = fetch(`${baseUrl}index.json`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(async (i: StopHeatIndex) => {
       // Only the files under the current view; the rest load when the map moves there.
       await Promise.all(beatFilesFor(i, this.heatViewBox()).map(f => this.heatBeat(f)));
