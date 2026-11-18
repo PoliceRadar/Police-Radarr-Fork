@@ -21,20 +21,27 @@ export async function refreshToken(token: string, presentedBy?: string) {
   const subscription = await playSubscription(token);
   const verdict = evaluateSubscription(subscription);
   if (!verdict.productMatches) throw new Error('This purchase is not Patrol Radar Pro');
-  const { data: previous } = await db.from('pro_purchases').select('user_id')
+  const { data: previous, error: previousError } = await db.from('pro_purchases').select('user_id')
     .eq('token_sha256', tokenHash).maybeSingle();
-  // Never transfer a previously claimed purchase merely because another client
-  // replays its token. Ownership recovery needs a separate verified support flow.
-  if (previous?.user_id && presentedBy && previous.user_id !== presentedBy) {
-    throw new Error('Purchase already linked to another account');
-  }
-  let owner = previous?.user_id || presentedBy;
-  if (!owner && verdict.linkedPurchaseToken) {
+  if (previousError) throw new Error('Could not check purchase ownership');
+  // Google's linked token can belong to an existing subscriber after a plan change.
+  // Do not let a new caller claim the replacement token before RTDN arrives.
+  let owner = previous?.user_id || null;
+  if (verdict.linkedPurchaseToken) {
     const linkedHash = await sha256(verdict.linkedPurchaseToken);
-    const { data: linked } = await db.from('pro_purchases').select('user_id')
+    const { data: linked, error: linkedError } = await db.from('pro_purchases').select('user_id')
       .eq('token_sha256', linkedHash).maybeSingle();
-    owner = linked?.user_id;
+    if (linkedError) throw new Error('Could not check linked purchase ownership');
+    if (linked?.user_id) {
+      if (owner && owner !== linked.user_id) throw new Error('Conflicting purchase ownership');
+      owner = linked.user_id;
+    }
   }
+  // A token is not transferable just because a new anonymous account presents it.
+  // Database trigger also rejects competing claims that race between read and upsert.
+  if (presentedBy && owner && owner !== presentedBy)
+    throw new Error('Purchase already linked to another account');
+  if (!owner) owner = presentedBy;
   // RTDN can arrive before the device sends its first verified purchase.
   if (!owner) return null;
   const { error } = await db.from('pro_purchases').upsert({

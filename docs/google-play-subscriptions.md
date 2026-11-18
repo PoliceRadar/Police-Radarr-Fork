@@ -10,7 +10,7 @@ Android package: io.github.missionaryj.patrolradar. Subscription product: patrol
 - Free Stop History preview; verified users get full shading and filters. Web has no Play checkout.
 
 ## Backend and Google Cloud setup (required before merging)
-1. Apply supabase/migrations/20261117000000_play_pro_entitlements.sql in the existing Supabase project and inspect the table RLS policies and service-role-only founder RPC.
+1. Apply both Supabase migrations (20261117000000_play_pro_entitlements.sql, then 20261118000000_pro_purchase_owner_immutable.sql) in the existing project. Inspect RLS, the service-role-only founder RPC and the trigger that prevents purchase-token ownership reassignment.
 2. Enable Google Play Android Developer API in the Play-linked Google Cloud project. Create a narrowly privileged service account and authorize Play Console API access to view purchase status and acknowledge subscriptions.
 3. Set Supabase Edge Function secret GOOGLE_PLAY_SERVICE_ACCOUNT_JSON to the complete JSON service account credential via secure Supabase secrets; do not commit keys, store them in Android, or paste them into chat. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are available to server functions.
 4. Deploy pro-entitlement and pro-rtdn functions. Supabase config.toml intentionally disables gateway JWT verification because pro-entitlement validates Supabase Auth tokens through GoTrue and pro-rtdn validates Google-issued OIDC tokens.

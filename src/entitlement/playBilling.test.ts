@@ -7,6 +7,7 @@ const plugin = readFileSync('android/app/src/main/java/io/github/missionaryj/pat
 const server = readFileSync('supabase/functions/_shared/store.ts', 'utf8');
 const verifier = readFileSync('supabase/functions/_shared/play.ts', 'utf8');
 const sql = readFileSync('supabase/migrations/20261117000000_play_pro_entitlements.sql', 'utf8');
+const ownershipSql = readFileSync('supabase/migrations/20261118000000_pro_purchase_owner_immutable.sql', 'utf8');
 
 describe('Play subscription security boundaries', () => {
   it('never upgrades Pro from Android callback or local install/grant flag', () => {
@@ -41,6 +42,10 @@ describe('Play subscription security boundaries', () => {
     expect(sql).toContain('create table if not exists public.pro_founders');
     expect(server).toContain("source: 'founder'");
     expect(server).toContain('acknowledgeSubscription');
+    expect(server).toContain('owner = linked.user_id');
+    expect(server).toContain('owner !== presentedBy');
+    expect(ownershipSql).toContain('old.user_id is distinct from new.user_id');
+    expect(ownershipSql).toContain('before update of user_id');
   });
   it('requires authenticated Google Pub/Sub notifications', () => {
     const rtdn = readFileSync('supabase/functions/pro-rtdn/index.ts', 'utf8');
