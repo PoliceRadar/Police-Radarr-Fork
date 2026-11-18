@@ -2,22 +2,28 @@ name: Android APK
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py']
+    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py', '.github/scripts/upload-play-release.sh']
   pull_request:
     branches: [main]
-    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py']
+    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py', '.github/scripts/upload-play-release.sh']
   workflow_dispatch:
     inputs:
       track:
-        description: 'Play testing track. alpha is closed testing. beta is open testing. production is rejected.'
+        description: 'Play testing track. internal is the default. alpha is closed testing. beta is open testing. production is rejected.'
         type: choice
         required: true
-        default: alpha
+        default: internal
         options:
+          - internal
           - alpha
           - beta
 permissions: { contents: write }
-concurrency: { group: android-apk, cancel-in-progress: true }
+# Pull requests still cancel a superseded pull request run. Pushes and manual
+# dispatches share a separate group and queue, so a second run cannot cancel
+# an in-flight Play upload. A pull request also cannot cancel that upload.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && 'android-apk-pr' || 'android-apk-release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -87,7 +93,8 @@ jobs:
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
-          # versionCode. Play rejects a code that is not higher than every code already uploaded.
+          # versionCode is this workflow's run number. Internal and Open testing are at 237;
+          # run numbers above 239 are ahead of those. versionName is package.json; bump it per release.
           # Do not rename this workflow file: run_number would restart and collide. See docs/play-store/github-play-upload.md.
           VERSION_CODE: ${{ github.run_number }}
           VITE_MAPBOX_PUBLIC_TOKEN: ${{ vars.VITE_MAPBOX_PUBLIC_TOKEN }}
@@ -167,7 +174,7 @@ jobs:
   # Runs only after apk tests and the signed aab both succeed, and only for
   # pushes and manual runs of missionaryj/patrol-radar. Pull requests and forks
   # do not upload. r0adkll/upload-google-play defaults to production when
-  # `tracks` is omitted; resolve-play-track.sh must print alpha or beta first.
+  # `tracks` is omitted; the track must be internal, alpha, or beta before it runs.
   play:
     name: Upload to Play testing track
     needs: [apk, aab, play-track-guard]
@@ -198,9 +205,9 @@ jobs:
         run: |
           track="$(.github/scripts/resolve-play-track.sh "$EVENT_NAME" "$TRACK_INPUT" "$REPOSITORY" "$REF")"
           case "$track" in
-            alpha|beta) ;;
+            internal|alpha|beta) ;;
             *)
-              echo "::error title=Production blocked::Resolved track '$track' is not alpha or beta."
+              echo "::error title=Production blocked::Resolved track '$track' is not internal, alpha, or beta."
               exit 1
               ;;
           esac
@@ -258,16 +265,16 @@ jobs:
           PLAY_DIR: play
         run: python3 .github/scripts/write-play-release-notes.py
 
-      - name: Refuse any track other than alpha or beta
+      - name: Refuse any track other than internal, alpha, or beta
         id: guard
         if: steps.creds.outputs.enabled == 'true'
         env:
           TRACK: ${{ steps.track.outputs.track }}
         run: |
           case "$TRACK" in
-            alpha|beta) ;;
+            internal|alpha|beta) ;;
             *)
-              echo "::error title=Production blocked::Refusing to upload. Track '${TRACK}' is not alpha or beta. The Play upload action defaults to production when tracks is empty."
+              echo "::error title=Production blocked::Refusing to upload. Track '${TRACK}' is not internal, alpha, or beta. The Play upload action defaults to production when tracks is empty."
               exit 1
               ;;
           esac
@@ -283,32 +290,54 @@ jobs:
           echo "safe=true" >> "$GITHUB_OUTPUT"
           echo "Uploading versionCode ${{ github.run_number }} to ${TRACK}."
 
-      - name: Upload signed AAB to Google Play
+      # v1.1.5, commit e738b9dd8f2476ea806d921b64aacd24f34515a5. Checked out so
+      # upload-play-release.sh can read the commit error and retry once when Play
+      # says changesNotSentForReview must not be set.
+      - name: Checkout upload-google-play v1.1.5
         if: steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        uses: actions/checkout@v4
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: io.github.missionaryj.patrolradar
-          releaseFiles: play/patrol-radar-release.aab
-          tracks: ${{ steps.track.outputs.track }}
-          status: completed
-          changesNotSentForReview: false
-          releaseName: ${{ steps.notes.outputs.release_name }}
-          whatsNewDirectory: play/whatsnew
-          mappingFile: play/mapping.txt
-          debugSymbols: ${{ steps.guard.outputs.debug_symbols }}
+          repository: r0adkll/upload-google-play
+          ref: e738b9dd8f2476ea806d921b64aacd24f34515a5
+          path: .upload-google-play
+          persist-credentials: false
+
+      - name: Setup Node for upload-google-play
+        if: steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Upload signed AAB to Google Play
+        id: upload
+        if: steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ steps.track.outputs.track }}
+          DEBUG_SYMBOLS: ${{ steps.guard.outputs.debug_symbols }}
+          ACTION_DIR: .upload-google-play
+        run: bash .github/scripts/upload-play-release.sh
 
       - name: Summarize Play upload
         if: success() && steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
         env:
           TRACK: ${{ steps.track.outputs.track }}
-          RELEASE_NAME: ${{ steps.notes.outputs.release_name }}
+          REVIEW_HOLD: ${{ steps.upload.outputs.review_hold }}
+          RETRIED: ${{ steps.upload.outputs.retried }}
         run: |
           {
             echo "### Google Play upload"
             echo ""
-            echo "Uploaded \`patrol-radar-release.aab\` to track \`${TRACK}\` with status \`completed\` (every tester on that track, once Play publishes the release)."
-            echo "versionCode \`${{ github.run_number }}\` is the Android workflow run number. Release name: \`${RELEASE_NAME}\`."
+            echo "Uploaded \`patrol-radar-release.aab\` to track \`${TRACK}\` with status \`completed\`."
+            echo "versionCode \`${{ github.run_number }}\` is the Android workflow run number. versionName comes from package.json."
             echo ""
-            echo "This did not target production. If managed publishing is on, open Play Console, go to Publishing overview after review, and click **Publish changes**. Read the full change list first. Testers stay on the previous build until that click."
+            if [ "$TRACK" = "internal" ]; then
+              echo "Internal testing publishes to internal testers without Send for review."
+            elif [ "$RETRIED" = "true" ]; then
+              echo "Play rejected \`changesNotSentForReview\` because this edit does not need a review hold, so the edit was committed without it. Check Publishing overview before assuming Alpha or Open testers were held back."
+            else
+              echo "\`changesNotSentForReview\` was set, so this release is waiting in Publishing overview and was not sent for review. Open Publishing overview, read the full change list, click **Send for review**, and after approval click **Publish changes**."
+            fi
+            echo ""
+            echo "This did not target production. Review hold: \`${REVIEW_HOLD}\`."
           } >> "$GITHUB_STEP_SUMMARY"

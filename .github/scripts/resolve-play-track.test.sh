@@ -53,9 +53,12 @@ expect_reject() {
   echo "ok $desc rejected"
 }
 
-expect_track "push defaults to alpha" alpha push "" "$repo" "$ref"
-expect_track "push ignores a beta input" alpha push beta "$repo" "$ref"
-expect_track "push ignores a production input" alpha push production "$repo" "$ref"
+expect_track "push defaults to internal" internal push "" "$repo" "$ref"
+expect_track "push ignores an alpha input" internal push alpha "$repo" "$ref"
+expect_track "push ignores a beta input" internal push beta "$repo" "$ref"
+expect_track "push ignores a production input" internal push production "$repo" "$ref"
+expect_track "dispatch internal" internal workflow_dispatch internal "$repo" "$ref"
+expect_track "dispatch INTERNAL folds case" internal workflow_dispatch "INTERNAL" "$repo" "$ref"
 expect_track "dispatch alpha" alpha workflow_dispatch alpha "$repo" "$ref"
 expect_track "dispatch beta" beta workflow_dispatch beta "$repo" "$ref"
 expect_track "dispatch BETA folds case" beta workflow_dispatch "BETA" "$repo" "$ref"
@@ -66,7 +69,7 @@ expect_reject "dispatch Production" "cannot target production" workflow_dispatch
 expect_reject "dispatch prod" "cannot target production" workflow_dispatch prod "$repo" "$ref"
 expect_reject "dispatch spaced production" "cannot target production" workflow_dispatch " production " "$repo" "$ref"
 expect_reject "dispatch empty track" "defaults to production" workflow_dispatch "" "$repo" "$ref"
-expect_reject "dispatch internal" "not allowed" workflow_dispatch internal "$repo" "$ref"
+expect_reject "dispatch closed" "not allowed" workflow_dispatch closed "$repo" "$ref"
 expect_reject "dispatch alpha,production" "not allowed" workflow_dispatch "alpha,production" "$repo" "$ref"
 expect_reject "dispatch beta smashed with production" "not allowed" workflow_dispatch $'beta\nproduction' "$repo" "$ref"
 expect_reject "pull request" "pull_request" pull_request alpha "$repo" "$ref"
@@ -75,11 +78,17 @@ expect_reject "non-main ref" "refs/heads/main" workflow_dispatch beta "$repo" "r
 expect_reject "unknown event" "cannot upload" schedule "" "$repo" "$ref"
 
 workflow="$root/.github/workflows/android.yml"
-if ! grep -F "tracks: \${{ steps.track.outputs.track }}" "$workflow" >/dev/null; then
-  echo "FAIL workflow does not pass the resolved track to the upload action"
+if ! grep -F "TRACK: \${{ steps.track.outputs.track }}" "$workflow" >/dev/null; then
+  echo "FAIL workflow does not pass the resolved track into the upload step"
   failures=$((failures + 1))
 else
   echo "ok workflow passes the resolved track"
+fi
+if ! grep -q "cancel-in-progress: \${{ github.event_name == 'pull_request' }}" "$workflow"; then
+  echo "FAIL release runs can still cancel an in-progress Play upload"
+  failures=$((failures + 1))
+else
+  echo "ok only pull requests cancel in-progress runs"
 fi
 if grep -Eq 'tracks:[[:space:]]*production|track:[[:space:]]*production' "$workflow"; then
   echo "FAIL workflow hardcodes the production track"
@@ -103,42 +112,57 @@ fi
 python3 - <<'PY'
 import importlib.util
 import pathlib
-import sys
 
 path = pathlib.Path(".github/scripts/write-play-release-notes.py")
 spec = importlib.util.spec_from_file_location("play_notes", path)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-note = mod.build_note("1.0.33", "abcdefg", "Fix the scanner")
-assert note == "1.0.33 (abcdefg): Fix the scanner", note
-blank = mod.build_note("1.0.33", "abcdefg", "  \n\t")
-assert blank == "1.0.33 (abcdefg)", blank
-long = mod.build_note("1.0.33", "abcdefg", "x" * 600)
-assert len(long) == 500, len(long)
-assert long.startswith("1.0.33 (abcdefg): "), long
-injected = mod.build_note("1.0.33", "abcdefg", "::error::boom\nsecond")
-assert injected == "1.0.33 (abcdefg): ::error::boom second", injected
-assert "\n" not in injected, injected
+expected = "We squashed bugs and improved performance so Patrol Radar is better for you"
+assert mod.RELEASE_NOTES == expected, mod.RELEASE_NOTES
 print("ok release note helper")
 PY
 
 tmp="$(mktemp -d)"
-GITHUB_SHA="$(git rev-parse HEAD)" PLAY_DIR="$tmp" GITHUB_OUTPUT="$tmp/output" \
-  python3 .github/scripts/write-play-release-notes.py >/tmp/play-notes-log
-if [ ! -s "$tmp/whatsnew/whatsnew-en-US" ]; then
-  echo "FAIL release notes file was not written"
+PLAY_DIR="$tmp" python3 .github/scripts/write-play-release-notes.py >/tmp/play-notes-log
+note_file="$tmp/whatsnew/whatsnew-en-US"
+if [ "$(cat "$note_file")" != "We squashed bugs and improved performance so Patrol Radar is better for you" ]; then
+  echo "FAIL release notes file contents: $(cat "$note_file")"
   failures=$((failures + 1))
 else
-  echo "ok release notes file ($(tr -d '\n' < "$tmp/whatsnew/whatsnew-en-US" | wc -c) bytes of text)"
-fi
-if ! grep -q '^release_name=' "$tmp/output"; then
-  echo "FAIL release_name output missing"
-  failures=$((failures + 1))
-else
-  echo "ok release_name output"
+  echo "ok release notes file"
 fi
 rm -rf "$tmp"
+
+# shellcheck disable=SC1091 # path is computed from the repo root
+source "$root/.github/scripts/upload-play-release.sh"
+if [ "$(defer_review_for_track internal)" != "false" ] || [ "$(defer_review_for_track alpha)" != "true" ] || [ "$(defer_review_for_track beta)" != "true" ]; then
+  echo "FAIL defer_review_for_track"
+  failures=$((failures + 1))
+else
+  echo "ok internal publishes immediately and alpha/beta hold for review"
+fi
+if defer_review_for_track production >/dev/null 2>&1; then
+  echo "FAIL production was given a review flag"
+  failures=$((failures + 1))
+else
+  echo "ok production has no review flag"
+fi
+printf '%s\n' 'Error: Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.' >/tmp/play-flag-reject.log
+printf '%s\n' 'Error: Please set the query parameter changesNotSentForReview to true. Once committed, the changes in this edit can be sent for review from the Google Play Console UI.' >/tmp/play-flag-required.log
+printf '%s\n' 'Error: Version code 240 has already been used.' >/tmp/play-flag-other.log
+if ! review_flag_rejected /tmp/play-flag-reject.log; then
+  echo "FAIL did not recognize the must-not-be-set error"
+  failures=$((failures + 1))
+else
+  echo "ok must-not-be-set error is retryable"
+fi
+if review_flag_rejected /tmp/play-flag-required.log || review_flag_rejected /tmp/play-flag-other.log; then
+  echo "FAIL a non-retryable Play error was treated as the review-flag rejection"
+  failures=$((failures + 1))
+else
+  echo "ok other Play errors are not retried without the review hold"
+fi
 
 check_creds="$root/.github/scripts/check-play-service-account.py"
 run_creds() {

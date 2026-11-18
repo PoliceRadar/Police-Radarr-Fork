@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Resolve the Google Play track for a Patrol Radar workflow run.
 # Usage: resolve-play-track.sh EVENT_NAME TRACK_INPUT REPOSITORY REF
-# Prints "alpha" or "beta". Exits 1 for every refusal, including production.
-# Push to main always resolves to alpha; the track input is ignored on push.
+# Prints "internal", "alpha", or "beta". Exits 1 for every refusal, including production.
+# A push to main always resolves to internal. The track input cannot retarget a push.
 set -euo pipefail
 
 event_name="${1:-}"
@@ -29,8 +29,8 @@ fi
 
 case "$event_name" in
   push)
-    # Main merges always go to closed testing. A push payload cannot retarget the track.
-    track="alpha"
+    # Main merges go to internal testing only. A push payload cannot select alpha, beta, or production.
+    track="internal"
     ;;
   workflow_dispatch)
     track="$track_input"
@@ -44,15 +44,15 @@ esac
 track="$(printf '%s' "$track" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
 
 case "$track" in
-  alpha|beta) ;;
+  internal|alpha|beta) ;;
   production|prod)
-    die "Refusing Play track '${track}'. This workflow cannot target production. Allowed tracks: alpha (closed testing), beta (open testing)."
+    die "Refusing Play track '${track}'. This workflow cannot target production. Allowed tracks: internal, alpha, beta."
     ;;
   "")
     die "No Play track was set. The upload action defaults to production when tracks is empty, so this workflow refuses to continue."
     ;;
   *)
-    die "Play track '${track}' is not allowed. Allowed tracks: alpha, beta. Production is rejected."
+    die "Play track '${track}' is not allowed. Allowed tracks: internal, alpha, beta. Production is rejected."
     ;;
 esac
 

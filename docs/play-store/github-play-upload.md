@@ -4,107 +4,126 @@ Package: `io.github.missionaryj.patrolradar`.
 
 The **Android APK** workflow (`.github/workflows/android.yml`) builds the signed release AAB on every non-pull-request run. After the `apk` tests and the `aab` job both succeed, the `play` job uploads that AAB to a **testing track**. It never targets production.
 
-| How the workflow starts | Play track | Who gets it |
+| How the workflow starts | Play track | What happens |
 | --- | --- | --- |
-| Push to `main` | `alpha` | Closed testing → Alpha |
-| Actions → Android APK → Run workflow, track **alpha** | `alpha` | Closed testing → Alpha |
-| Actions → Android APK → Run workflow, track **beta** | `beta` | Open testing |
+| Push to `main` | `internal` | Internal testing. Publishes to internal testers without Send for review. |
+| Run workflow, track **internal** (the default) | `internal` | Same as a push. |
+| Run workflow, track **alpha** | `alpha` | Closed testing. Held for you to send for review and publish. |
+| Run workflow, track **beta** | `beta` | Open testing. Held the same way. |
 
-Pull requests do not build the signed AAB and do not upload. Forks do not upload. If the `PLAY_SERVICE_ACCOUNT_JSON` secret is missing or blank, the upload step is skipped with a notice and the workflow stays green. The artifact `patrol-radar-release-aab` is still there for a manual upload.
+Alpha and beta run only when you dispatch the workflow and choose that track. A push cannot select them.
 
-The upload uses [r0adkll/upload-google-play](https://github.com/r0adkll/upload-google-play) **v1.1.5**, pinned to commit `e738b9dd8f2476ea806d921b64aacd24f34515a5`. That action uploads to **production** when its `tracks` input is left empty. This workflow rejects an empty track, `production`, `prod`, and any name other than `alpha` or `beta` before the action runs. The track choice in the GitHub UI has no production option. A push to `main` always uses `alpha`; the dispatch input cannot retarget a push.
+Pull requests do not build the signed AAB and do not upload. Forks do not upload. If `PLAY_SERVICE_ACCOUNT_JSON` is missing or blank, the upload step is skipped with a notice and the workflow stays green. The artifact `patrol-radar-release-aab` is still there.
+
+The upload uses [r0adkll/upload-google-play](https://github.com/r0adkll/upload-google-play) **v1.1.5**, commit `e738b9dd8f2476ea806d921b64aacd24f34515a5`. That action uploads to **production** when its `tracks` input is left empty. This workflow rejects an empty track, `production`, `prod`, and any name other than `internal`, `alpha`, or `beta` before the action runs. The GitHub UI has no production option. A push to `main` always uses `internal`.
+
+Release status is **`completed`** on the chosen testing track (every tester on that track, once Play actually publishes it). This is not a staged production rollout. Release notes for every track are the en-US text: "We squashed bugs and improved performance so Patrol Radar is better for you". The ProGuard `mapping.txt` is attached. Native debug symbols are attached when the AAB job produced `native-debug-symbols.zip`.
 
 ## One-time setup
 
-Use a service account that can release **this app** to testing tracks. Keep it separate from the Supabase secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, which is for purchase verification. Do not put a private key in the repo, in Android, or in chat.
+The GitHub secret is `PLAY_SERVICE_ACCOUNT_JSON`. It must be able to release **this app** to testing tracks, and it must not have production release permission.
+
+Use a service account that is **not** `play-verifier@patrol-radar-billing.iam.gserviceaccount.com`, or add the testing-track release permission to that verifier account. The verifier key in Supabase (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`) is for purchase checks. A separate upload account keeps a leaked verifier key from shipping builds and a leaked CI key from acknowledging purchases. Prefer a separate account. Do not put a private key in the repo, in Android, or in chat.
 
 ### 1. Google Cloud
 
-1. In Play Console open **Setup → API access** and use the Google Cloud project already linked to this developer account. Link a project there first if the page says none is linked.
+1. In Play Console open **Setup → API access** and use the Google Cloud project already linked to this developer account. Link a project there first if the page says none is linked. The billing project that owns `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` is the linked project if that account is already invited.
 2. In that project, open [Google Play Android Developer API](https://console.cloud.google.com/apis/library/androidpublisher.googleapis.com) and click **Enable**.
-3. **IAM & Admin → Service accounts → Create service account**. Name it `patrol-radar-play-upload`. Do not grant it any Google Cloud IAM roles. Play Console permissions are what allow the upload.
-4. Open the new account → **Keys → Add key → Create new key → JSON**. A JSON file downloads. That file is the private key.
+3. Either create a new service account, or skip to the Play Console step and grant release permission to the verifier account.
+   - **IAM & Admin → Service accounts → Create service account**. Name it `patrol-radar-play-upload`. Do not grant it any Google Cloud IAM roles.
+   - Open the account → **Keys → Add key → Create new key → JSON**.
+4. If you reuse the verifier account, create a JSON key for `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` only if GitHub does not already have one. Do not paste that key into Supabase a second time.
 
 ### 2. Play Console permissions
 
-1. Play Console → **Users and permissions → Invite new users**.
-2. Paste the service account email (`client_email` in the JSON, ending in `iam.gserviceaccount.com`). Leave access expiry off.
-3. Under **App permissions**, add only **Patrol Radar** (`io.github.missionaryj.patrolradar`). Do not grant account-wide admin.
-4. Grant these app permissions:
+1. Play Console → **Users and permissions**. Invite the new service account, or open the existing `play-verifier@patrol-radar-billing.iam.gserviceaccount.com` user.
+2. Under **App permissions**, add only **Patrol Radar** (`io.github.missionaryj.patrolradar`). Do not grant account-wide admin.
+3. Grant:
    - **View app information (read-only)**
    - **Release apps to testing tracks**
-5. Do **not** grant **Admin (all permissions)**, **Release to production, exclude devices, and use Play App Signing**, **View financial data**, or **Manage orders and subscriptions**. "Release apps to testing tracks" cannot publish a production release.
-6. Click **Invite user**. Apply. A new user can take a few minutes to be accepted by the API. The first upload returns 401 or 403 until it does.
+4. Leave **Release to production, exclude devices, and use Play App Signing** off. Also leave off **Admin (all permissions)**. "Release apps to testing tracks" cannot publish a production release.
+5. Save. A new user can take a few minutes to be accepted by the API. The first upload returns 401 or 403 until it does.
 
-You do not need **Manage testing tracks and edit tester lists**. Tester lists stay as they are. Set those up by hand (see [closed-test-checklist.md](closed-test-checklist.md)).
+You do not need **Manage testing tracks and edit tester lists**. Tester lists stay as they are. Set those up by hand (see [closed-test-checklist.md](closed-test-checklist.md)). The internal testing list has to include the accounts that should receive every `main` build.
 
 ### 3. GitHub secret
 
 1. GitHub → `missionaryj/patrol-radar` → **Settings → Secrets and variables → Actions → New repository secret**.
 2. Name: `PLAY_SERVICE_ACCOUNT_JSON`
-3. Value: the entire JSON file, including the opening and closing braces. Do not wrap it in extra quotes.
-4. Save. Repository secret, not an environment secret. The workflow does not use a GitHub Environment, so a main merge is not held for a reviewer here. Managed publishing is the publish gate (below).
+3. Value: the entire JSON file, including the braces. Do not wrap it in extra quotes.
+4. Save. Repository secret, not an environment secret. A `main` merge is not held for a GitHub reviewer. Alpha and beta are held in Play Console instead.
 
-A missing secret skips the upload. A secret that is not valid service-account JSON fails the `play` job so a bad paste is visible. The `apk` and `aab` jobs are already done by then; their artifacts remain.
+A missing secret skips the upload. A secret that is not valid service-account JSON fails the `play` job. The `apk` and `aab` artifacts remain.
 
 ### 4. Confirm the tracks
 
-The API track id for Closed testing → Alpha is `alpha`. The API track id for Open testing is `beta`. Those ids are not the display name. Before the first **beta** upload, open **Test and release → Testing → Open testing** once and save countries and testers. If the API says the track was not found, that page has not been set up yet.
+API track ids, not display names:
 
-## Open testing
+- `internal` — Internal testing
+- `alpha` — Closed testing → Alpha
+- `beta` — Open testing
 
-Closed testing receives every successful `main` build. Open testing does not, because that track is wider than the Alpha email list.
+Open **Test and release → Testing → Internal testing**, **Closed testing → Alpha**, and **Open testing** once so each track exists and has testers or countries saved. If the API says the track was not found, that page has not been set up.
 
-**New build on Open testing.** Actions → **Android APK** → **Run workflow** → branch **main** → track **beta**. The run builds current `main`, gives it a new versionCode (that run's number), and uploads to `beta`. The same run also refreshes the rolling `android-latest` debug APK, which is existing behavior for any non-pull-request run. Dispatching from a branch other than `main` fails the Play job and does not upload.
+## What you run
 
-**Same binary testers already have on Alpha.** Play Console → **Test and release → Testing → Closed testing → Alpha** → the release → **Promote release** → **Open testing**. That copies the existing version code. It is not a second upload, and this workflow does not do it. Promoting from the console still cannot be aimed at production by the workflow; do not choose production in the console promote dialog if you only wanted Open testing.
+**Internal, every merge.** Push to `main`, or Actions → **Android APK** → **Run workflow** → branch **main** → track **internal**. The run also refreshes the rolling `android-latest` debug APK, which is existing behavior for any non-pull-request run. Dispatching from a branch other than `main` fails the Play job and does not upload.
 
-## Release status and managed publishing
+**Closed testing.** Run workflow on `main` and choose **alpha**. The workflow does not do this on push.
 
-The upload sets release status to **`completed`**: once Play actually publishes the release, every tester on that track gets it. This is not a staged production rollout (`inProgress` plus a user fraction). `changesNotSentForReview` is **false**, so committing the edit sends it for review. Release notes are the `en-US` "what's new" text: `versionName (short SHA): commit title`, from `package.json` and the commit subject, cut at 500 characters. The ProGuard `mapping.txt` is attached. Native debug symbols are attached when the AAB job produced `native-debug-symbols.zip`.
+**Open testing.** Run workflow on `main` and choose **beta**.
 
-Publishing overview on 7 November 2026 had **managed publishing** turned on for this app. Recheck the toggle; it can be changed.
+Pushes and manual runs share one concurrency group and **queue**. A second push or dispatch waits. It does not cancel an upload that is already calling Play. Pull request runs use a different group and still cancel a superseded pull request run. A pull request cannot cancel a Play upload.
 
-**Managed publishing on.** A green Actions run means Play accepted the bundle. Testers do not get it yet.
+## Review and managed publishing
 
-1. Open Play Console → **Publishing overview**.
-2. The release should be in review, then under **Changes ready to publish** after Google approves it. You do not upload the AAB yourself.
-3. Read the whole list. **Publish changes** publishes every change in that list, including store listing or policy edits that were waiting, not only this AAB.
-4. Click **Publish changes** (the control may say **Go live** or **Publish**). Until that click, Alpha or Open testers stay on the previous build.
+Managed publishing is on. `r0adkll/upload-google-play` passes `changesNotSentForReview` through to `edits.commit` and fails the step on a 400. It does not retry, and it does not set `changesInReviewBehavior`.
 
-**Managed publishing off.** After Google finishes review, the testing-track release goes out without that extra click. Still confirm the track and the version in the console before telling testers.
+- **Internal.** `changesNotSentForReview` is false. Status is `completed`. Internal testing publishes to the internal tester list without **Send for review**. You pre-approved that.
+- **Alpha and beta.** The first commit sets `changesNotSentForReview` true, so the release is added to **Changes not yet sent for review** and is not sent for review. You press both buttons yourself:
+  1. Open **Publishing overview**.
+  2. Read the whole list under **Changes not yet sent for review**. It can include other waiting edits, not only this AAB.
+  3. Click **Send for review** for the changes you intend.
+  4. After Google approves them, they sit under **Changes ready to publish** while managed publishing is on. Read that list too. **Publish changes** publishes every change in it.
+  5. Click **Publish changes** (the control may say **Go live** or **Publish**). Alpha or Open testers stay on the previous build until that click.
 
-If a change sits under **Changes not yet sent for review**, this workflow did not ask for that. Check for an edit someone started in the console, and do not send unrelated changes for review.
+Play returns `Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.` when the flag is set on an edit that does not need review (this is common for internal, and it also happens for alpha or beta when nothing is waiting on a rejection). The commit did not succeed. The workflow retries that alpha or beta upload **once**, without the flag. The job summary says when that retry was used. Check Publishing overview: Play may have sent that edit for review on its own. The retry does **not** run for other errors (version code, permissions, an unknown track), so a failed alpha upload is not silently sent for review.
 
-## versionCode
+The opposite error, `Please set the query parameter changesNotSentForReview to true`, means Play refused to commit unless the hold is set. The workflow does not flip an internal upload onto that hold. The edit is not committed.
 
-`android/app/build.gradle` sets `versionCode` from `VERSION_CODE`. The `aab` job sets that to `github.run_number`, the Android APK workflow's run number. `versionName` stays `package.json` `version`.
+The pinned action does not pass `changesInReviewBehavior`. If a review is already open, Play's default for a commit without that parameter is `CANCEL_IN_REVIEW_AND_SUBMIT`, which can cancel the open review. Check Publishing overview after an internal upload that lands while an Alpha or Open testing review is in progress.
 
-Around 18 November 2026 the run number is about **239**. On 7 November 2026 the Alpha release in review was version name `1.0.25`, version code **58**. The run number is ahead of that code. Gaps are normal: pull requests, failed runs, and manual dispatches all increment the run number, and Play allows unused codes.
+## versionName and versionCode
 
-Before the first automated upload, look up the highest version code on **any** track, including drafts, halted releases, and releases in review. Play rejects a code that is not strictly greater.
+`versionName` is `version` in `package.json`. Gradle reads it when `VERSION_NAME` is unset. Bump `package.json` for each release you want testers to see as a new version name, and do that before an alpha or beta dispatch. The workflow does not bump it. Play will still accept a new versionCode with an unchanged versionName.
 
-Risks:
+`versionCode` is `github.run_number` for this workflow file, passed as `VERSION_CODE`. As of 18 November 2026, Internal testing and Open testing are at version code **237**. Run numbers **above 239** are ahead of that. Gaps are normal: pull requests, failed runs, and dispatches all increment the number, and Play allows unused codes.
 
-- A **re-run of the same workflow run** reuses the run number (`github.run_attempt` does not change it). If that attempt already committed the code to Play, the re-run fails with a version-code error. Start a new run (push or **Run workflow**) instead. Re-running the failed jobs is safe only when the earlier attempt did not commit the edit.
-- A **manual upload** whose version code is higher than the current run number blocks CI until the run number passes it. Do not hand-bump a code to something like 10000.
-- **Renaming or replacing** `.github/workflows/android.yml` can start a new workflow whose run number goes back to 1. Those bundles would be rejected. Keep this file path.
-- A **beta** dispatch uses a new run number, so that Open testing build is a higher version code than earlier Alpha builds of the same commit. Console **Promote release** is how the same version code moves from Alpha to Open testing.
+Play rejects a code that is not strictly greater than every code already uploaded, including drafts, halted releases, and releases in review.
+
+- A **re-run of the same workflow run** reuses the run number. If that attempt already committed the code, the re-run fails. Start a new run. Re-running failed jobs is safe only when the earlier attempt did not commit the edit.
+- A **manual upload** above the current run number blocks CI until the run number passes it.
+- **Renaming or replacing** `.github/workflows/android.yml` can restart the run number at 1. Keep this file path.
+- An alpha or beta dispatch uses a new run number, higher than earlier internal builds of older runs.
 
 ## What a green `play` job means
 
 - **Notice "Google Play upload skipped".** The secret is unset. Nothing was sent to Play.
-- **Job failed on "Refusing Play track".** The track was production, empty, or something other than `alpha` or `beta`. Nothing was uploaded.
-- **Job succeeded and the summary names a track.** Play accepted the edit and, unless managed publishing is holding it, sent it for review. Check Publishing overview before telling testers the build is installable.
+- **Job failed on "Refusing Play track".** The track was production, empty, or not `internal`, `alpha`, or `beta`. Nothing was uploaded.
+- **Internal success.** Play accepted the internal release. Internal testers can install it without Send for review.
+- **Alpha or beta success, review hold true.** The bundle is in Publishing overview and was not sent for review. You still click **Send for review** and, after approval, **Publish changes**.
+- **Alpha or beta success, retried.** Play refused the review hold. The summary says so. Check Publishing overview before telling testers anything.
 
 ## When the API rejects the upload
 
-- **401 / 403.** The API is not enabled, the JSON is for a different project, or the Play Console invite has not applied yet. Permissions do not include production release; that is not the cause of a testing-track 403.
-- **Package not found.** The first AAB for this package has to be uploaded once in Play Console so the app exists. Alpha already has builds, so this should not happen for `io.github.missionaryj.patrolradar`.
-- **Version code has already been used.** See versionCode above. Use a new run.
-- **Track not found.** The id must be `alpha` or `beta`, and Open testing must have been opened once for `beta`.
-- **Edit in progress / precondition check failed.** A draft edit is open in Play Console, or another client committed first. Finish or discard that draft if this build should replace it, then start a **new** Actions run if the version code was already consumed.
+- **401 / 403.** The API is not enabled, the JSON is the wrong project, or the Play Console permission has not applied. Missing production permission is not the cause of a testing-track 403.
+- **Package not found.** The app must already exist in Play Console. It does.
+- **Version code has already been used.** Use a new run. See above.
+- **Track not found.** The id must be `internal`, `alpha`, or `beta`, and that testing page must have been opened once.
+- **changesNotSentForReview must not be set.** Alpha and beta retry once without the flag. Internal does not set the flag. If it still fails, the edit was not committed.
+- **Please set changesNotSentForReview to true.** Play would not commit without the hold. Nothing was published.
+- **Edit in progress / precondition check failed.** A draft edit is open in Play Console, or another client committed first. Finish or discard that draft, then start a **new** Actions run if the version code was already consumed.
 
 ## Manual fallback
 
-Download artifact `patrol-radar-release-aab` from a successful `main` run, unzip `patrol-radar-release.aab`, and upload it in Play Console to Closed testing → Alpha or Open testing only. Do not upload the debug APK. Do not create a production release.
+Download artifact `patrol-radar-release-aab` from a successful `main` run, unzip `patrol-radar-release.aab`, and upload it in Play Console to Internal, Closed testing → Alpha, or Open testing. Do not upload the debug APK. Do not create a production release.
