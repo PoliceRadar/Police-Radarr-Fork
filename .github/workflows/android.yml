@@ -2,11 +2,20 @@ name: Android APK
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml']
+    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py']
   pull_request:
     branches: [main]
-    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml']
+    paths: ['src/**', 'v2/**', 'index.html', 'public/**', 'android/**', 'package*.json', 'capacitor.config.json', 'vite.config.ts', '.github/workflows/android.yml', '.github/scripts/resolve-play-track.sh', '.github/scripts/resolve-play-track.test.sh', '.github/scripts/write-play-release-notes.py', '.github/scripts/check-play-service-account.py']
   workflow_dispatch:
+    inputs:
+      track:
+        description: 'Play testing track. alpha is closed testing. beta is open testing. production is rejected.'
+        type: choice
+        required: true
+        default: alpha
+        options:
+          - alpha
+          - beta
 permissions: { contents: write }
 concurrency: { group: android-apk, cancel-in-progress: true }
 jobs:
@@ -78,6 +87,8 @@ jobs:
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          # versionCode. Play rejects a code that is not higher than every code already uploaded.
+          # Do not rename this workflow file: run_number would restart and collide. See docs/play-store/github-play-upload.md.
           VERSION_CODE: ${{ github.run_number }}
           VITE_MAPBOX_PUBLIC_TOKEN: ${{ vars.VITE_MAPBOX_PUBLIC_TOKEN }}
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
@@ -140,3 +151,164 @@ jobs:
           esac
           cd android
           ./gradlew compileDebugJavaWithJavac --no-daemon --console=plain
+
+  play-track-guard:
+    name: Play track guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reject production and other tracks
+        run: bash .github/scripts/resolve-play-track.test.sh
+
+  # Runs only after apk tests and the signed aab both succeed, and only for
+  # pushes and manual runs of missionaryj/patrol-radar. Pull requests and forks
+  # do not upload. r0adkll/upload-google-play defaults to production when
+  # `tracks` is omitted; resolve-play-track.sh must print alpha or beta first.
+  play:
+    name: Upload to Play testing track
+    needs: [apk, aab, play-track-guard]
+    if: |
+      success() &&
+      needs.apk.result == 'success' &&
+      needs.aab.result == 'success' &&
+      needs.play-track-guard.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.repository == 'missionaryj/patrol-radar'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve Play track
+        id: track
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TRACK_INPUT: ${{ github.event.inputs.track }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          track="$(.github/scripts/resolve-play-track.sh "$EVENT_NAME" "$TRACK_INPUT" "$REPOSITORY" "$REF")"
+          case "$track" in
+            alpha|beta) ;;
+            *)
+              echo "::error title=Production blocked::Resolved track '$track' is not alpha or beta."
+              exit 1
+              ;;
+          esac
+          echo "track=$track" >> "$GITHUB_OUTPUT"
+          echo "Play track: $track"
+
+      - name: Check Play service account
+        id: creds
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ steps.track.outputs.track }}
+        run: |
+          enabled="$(python3 .github/scripts/check-play-service-account.py)"
+          case "$enabled" in
+            enabled=true)
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              ;;
+            enabled=false)
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "::notice title=Google Play upload skipped::PLAY_SERVICE_ACCOUNT_JSON is not set. Nothing was uploaded to the ${TRACK} track. The signed AAB remains artifact patrol-radar-release-aab. Setup: docs/play-store/github-play-upload.md"
+              {
+                echo "### Google Play upload skipped"
+                echo ""
+                echo "\`PLAY_SERVICE_ACCOUNT_JSON\` is not set, so this run did not upload to Google Play."
+                echo "Track: \`${TRACK}\`. versionCode (workflow run number): \`${{ github.run_number }}\`."
+                echo "The signed bundle is still available as artifact \`patrol-radar-release-aab\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error title=Play credentials::Unexpected credential check result."
+              exit 1
+              ;;
+          esac
+
+      - name: Download signed release artifacts
+        if: steps.creds.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: patrol-radar-release-*
+          path: play
+          merge-multiple: true
+
+      - name: Download native debug symbols
+        if: steps.creds.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: patrol-radar-native-debug-symbols
+          path: play
+
+      - name: Write Play release notes
+        id: notes
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          PLAY_DIR: play
+        run: python3 .github/scripts/write-play-release-notes.py
+
+      - name: Refuse any track other than alpha or beta
+        id: guard
+        if: steps.creds.outputs.enabled == 'true'
+        env:
+          TRACK: ${{ steps.track.outputs.track }}
+        run: |
+          case "$TRACK" in
+            alpha|beta) ;;
+            *)
+              echo "::error title=Production blocked::Refusing to upload. Track '${TRACK}' is not alpha or beta. The Play upload action defaults to production when tracks is empty."
+              exit 1
+              ;;
+          esac
+          test -s play/patrol-radar-release.aab
+          test -s play/mapping.txt
+          test -s play/whatsnew/whatsnew-en-US
+          if [ -s play/native-debug-symbols.zip ]; then
+            echo "debug_symbols=play/native-debug-symbols.zip" >> "$GITHUB_OUTPUT"
+          else
+            echo "debug_symbols=" >> "$GITHUB_OUTPUT"
+            echo "No native debug symbols zip. Pre-stripped vendor libraries such as Mapbox do not include debug metadata."
+          fi
+          echo "safe=true" >> "$GITHUB_OUTPUT"
+          echo "Uploading versionCode ${{ github.run_number }} to ${TRACK}."
+
+      - name: Upload signed AAB to Google Play
+        if: steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: io.github.missionaryj.patrolradar
+          releaseFiles: play/patrol-radar-release.aab
+          tracks: ${{ steps.track.outputs.track }}
+          status: completed
+          changesNotSentForReview: false
+          releaseName: ${{ steps.notes.outputs.release_name }}
+          whatsNewDirectory: play/whatsnew
+          mappingFile: play/mapping.txt
+          debugSymbols: ${{ steps.guard.outputs.debug_symbols }}
+
+      - name: Summarize Play upload
+        if: success() && steps.creds.outputs.enabled == 'true' && steps.guard.outputs.safe == 'true'
+        env:
+          TRACK: ${{ steps.track.outputs.track }}
+          RELEASE_NAME: ${{ steps.notes.outputs.release_name }}
+        run: |
+          {
+            echo "### Google Play upload"
+            echo ""
+            echo "Uploaded \`patrol-radar-release.aab\` to track \`${TRACK}\` with status \`completed\` (every tester on that track, once Play publishes the release)."
+            echo "versionCode \`${{ github.run_number }}\` is the Android workflow run number. Release name: \`${RELEASE_NAME}\`."
+            echo ""
+            echo "This did not target production. If managed publishing is on, open Play Console, go to Publishing overview after review, and click **Publish changes**. Read the full change list first. Testers stay on the previous build until that click."
+          } >> "$GITHUB_STEP_SUMMARY"
