@@ -41,7 +41,7 @@ npm test
 npm run build
 ```
 
-The second command requires PyMuPDF and the exact official report and GeoJSON snapshots. It validates their checksums, reconciles every CPD beat-month to the audit, and aborts on a missing or ambiguous ordinary beat. Compare the two derived files to `public/data/illinois-2025/agencies.json` and `public/data/stop-heat/beats/cpd_2025.json`. The latter includes only a public boundary, aggregate counters and four-hour/weekday buckets for each beat. The regular complete map build validates and reindexes these aggregates. A selected-source build stays scoped to its explicit selection.
+The second command requires PyMuPDF and the exact official report and GeoJSON snapshots. It validates their checksums, reconciles every CPD beat-month to the audit, and aborts on a missing or ambiguous ordinary beat. Compare the two derived files to `public/data/illinois-2025/agencies.json` and `data/stop-heat/reviewed-beats/cpd_2025.json` (the full-precision reviewed copy; the app ships a simplified copy in `public/data/stop-heat/beats/`, see [Stop History performance](stop-heat-performance.md)). The latter includes only a public boundary, aggregate counters and four-hour/weekday buckets for each beat. The regular complete map build validates and reindexes these aggregates. A selected-source build stays scoped to its explicit selection.
 
 The original counts-only review receipts in `docs/data/illinois-2025/` describe the input audit before mapping. Two full real-file audits produced identical counts. Raw personal attributes, exact stop times, individual stop identifiers and individual fingerprints are excluded from the repository and app. The committed map tests reconcile all tile and polygon counters to the manifest and check both Illinois views.
 
@@ -53,7 +53,7 @@ Changes on this feature branch can be tested independently. The main branch trig
 
 On 2026-11-16 the statewide extracts were recounted for four municipal agencies and compared with `public/data/illinois-2025/agencies.json`. File 1 was a four-city filtered slice (`idot1_four_cities.txt`) of `2025 Traffic Data 1 Redacted .txt`; its SHA-256 does not match the full-file audit receipt. Files 2A and 2B matched the audit SHA-256 values. Agency totals still match the directory: Springfield 9,934, Champaign 4,701, Urbana 1,775, and Decatur 5,245.
 
-Springfield Police (code 13805) uses location codes 100–800 only. Those eight codes match the City of Springfield `SPD/Beat` FeatureServer layer 0 field `BEAT` one-to-one, so all 9,934 rows are shaded as ordinary Stop History beats in `public/data/stop-heat/beats/spd_2025.json`.
+Springfield Police (code 13805) uses location codes 100–800 only. Those eight codes match the City of Springfield `SPD/Beat` FeatureServer layer 0 field `BEAT` one-to-one, so all 9,934 rows are shaded as ordinary Stop History beats in `public/data/stop-heat/beats/spd_2025.json` (full-precision reviewed boundaries: `data/stop-heat/reviewed-beats/spd_2025.json`).
 
 Champaign Police (code 13111) location codes are district abbreviations, not the numbered Police Beats layer. They were matched to the City of Champaign Police Districts MapServer layer 26 field `District` with a case-insensitive exact comparison only:
 
@@ -62,7 +62,7 @@ Champaign Police (code 13111) location codes are district abbreviations, not the
 - CHNW → Northwest
 - CHSW → Southwest
 
-That includes mixed-case variants such as `chs` and `cHN`. 4,691 rows are shaded in `public/data/stop-heat/beats/champaign_2025.json`. The remaining 10 rows (CHW 2, 740, 796, CHNNW, CNW, S, SHW, URBANA, Urb) are listed under “Listed, not shaded” and are not guessed.
+That includes mixed-case variants such as `chs` and `cHN`. 4,691 rows are shaded in `public/data/stop-heat/beats/champaign_2025.json` (full-precision reviewed boundaries: `data/stop-heat/reviewed-beats/champaign_2025.json`). The remaining 10 rows (CHW 2, 740, 796, CHNNW, CNW, S, SHW, URBANA, Urb) are listed under “Listed, not shaded” and are not guessed.
 
 Urbana Police (code 13100) mostly uses beats 61–65 (1,769 rows) with six other codes on 6 rows. Decatur Police (code 13588) uses 801–810 on every row. Those codes are recorded, but no free public boundary file is available, so they are not shaded.
 

@@ -131,7 +131,7 @@
   <div class="group">
     <label class="switch"><input type="checkbox" id="flockmap" checked/><span></span><em>Flock camera (mapped)<small>Known Flock plate-reader cameras from OpenStreetMap. Not scan hits. © OpenStreetMap contributors (ODbL)</small></em></label>
     <small id="flock-status">Loading mapped cameras…</small>
-    <button type="button" id="open-tc" class="nav-row"><span><b>Traffic cameras</b><small id="tc-summary">Shown · alerts on</small></span><i aria-hidden="true">›</i></button>
+    <button type="button" id="open-tc" class="nav-row"><span><b>Traffic cameras <span class="pro-mark">PRO</span></b><small id="tc-summary">Pins locked · school/work alerts on</small></span><i aria-hidden="true">›</i></button>
     <button type="button" id="open-heat" class="nav-row"><span><b>Stop history <span class="pro-mark">PRO</span></b><small id="heat-summary">Free historical map preview</small></span><i aria-hidden="true">›</i></button>
   </div>
 
@@ -166,7 +166,7 @@
 
   </details>
 
-  <button type="button" id="open-pro-settings" class="settings-pro"><span><b>Patrol Radar Pro <span class="pro-mark">PRO</span></b><small>Explore the free Stop History preview and planned features</small></span><i aria-hidden="true">›</i></button>
+  <button type="button" id="open-pro-settings" class="settings-pro"><span><b>Patrol Radar Pro <span class="pro-mark">PRO</span></b><small>Pro camera pins, paid camera alerts, and Stop History filters; school/work-zone alerts stay free</small></span><i aria-hidden="true">›</i></button>
   <p id="founding-tester" class="founding-tester" hidden>Founding tester: Pro unlocked</p>
 
   <details class="settings-section" id="help-section"><summary><span><b>Help &amp; privacy</b><small>Setup tips, privacy and diagnostics</small></span></summary>
@@ -212,7 +212,9 @@
   </details>
 </aside>
 <aside id="tc-settings" class="drawer sub" aria-label="Traffic cameras" aria-hidden="true">
-  <header><button id="back-tc" class="icon-btn" aria-label="Back to Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Traffic cameras</h2><span class="hdr-spacer"></span></header>
+  <header><button id="back-tc" class="icon-btn" aria-label="Back to Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Traffic cameras <span class="pro-mark">PRO</span></h2><span class="hdr-spacer"></span></header>
+  <div class="pro-offer" id="tc-pro-offer"><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark">$1.99/month</span></div><p>Unlock traffic-camera map pins and upcoming-camera alerts for speed, red-light and traffic-monitoring cameras. School-zone and work-zone alerts are included for everyone.</p><button type="button" id="tc-upgrade" class="pro-upgrade">Explore Patrol Radar Pro</button><small>Open Pro settings to check Google Play subscription availability.</small></div>
+  <div class="tc-pro-controls">
   <h3 class="group-title">On the map</h3>
   <div class="group">
     <label class="switch"><input type="checkbox" id="trafficcams" checked/><span></span><em>Show traffic cameras<small>Speed, red-light, school-zone, work-zone and traffic-monitoring cameras across the US. Mapped locations, not scan hits.</small></em></label>
@@ -225,7 +227,8 @@
     <label class="switch"><input type="checkbox" id="tc-show-school_zone" checked/><span></span><em><b class="tc-lbl"><i class="tcam tcam-school_zone"></i>School-zone cameras</b></em></label>
     <label class="switch"><input type="checkbox" id="tc-show-work_zone" checked/><span></span><em><b class="tc-lbl"><i class="tcam tcam-work_zone"></i>Work-zone enforcement</b></em></label>
     <label class="switch"><input type="checkbox" id="tc-show-monitor" checked/><span></span><em><b class="tc-lbl"><i class="tcam tcam-monitor"></i>Traffic monitoring cameras</b></em></label>
-    <small>A hidden type is also never alerted.</small>
+    <small>A hidden type is also never alerted. School-zone and work-zone alerts still work when the map pins are locked.</small>
+  </div>
   </div>
   <h3 class="group-title">Alerts</h3>
   <div class="group" id="tc-alerts">
@@ -240,7 +243,7 @@
     <div class="field tc-dep"><span>Alert style</span>
       <select id="tc-style" data-seg data-labels="Sound + vibrate|Vibrate|Silent"><option value="sound" selected>Sound + vibration</option><option value="vibrate">Vibration only</option><option value="silent">Silent banner</option></select>
       <small>Every style shows a banner. The same camera won't alert again for 10 min.</small></div>
-    <small class="tc-priv">Alerts are worked out on this phone from your live location, which is never saved or sent.</small>
+    <small class="tc-priv">Alerts are worked out on this phone from your live location, which is never saved or sent. School-zone and work-zone alerts stay on even without Pro.</small>
   </div>
   <h3 class="group-title">Sources</h3>
   <div class="group"><small class="tc-credits">© OpenStreetMap contributors (ODbL 1.0); City of Chicago Data Portal; DC DDOT Automated Safety Cameras (CC BY 4.0); Seattle SDOT ATSC; Arlington County VA. Locations can be out of date.</small></div>
@@ -251,7 +254,7 @@
   <h3 class="group-title">On the map</h3>
   <div class="group">
     <label class="switch"><input type="checkbox" id="stopheat" checked/><span></span><em>Show historical stops<small>Free preview shows lighter historical shading. This is not live police activity.</small></em></label>
-    <div class="pro-offer" id="heat-pro-offer" hidden><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark" id="pro-price">$1.99/month</span></div><p>Unlock full-strength heatmap shading, year, time-of-day and weekday filters. Your free preview stays available.</p><button type="button" id="heat-upgrade" class="pro-upgrade" disabled>Subscribe with Google Play</button><button type="button" id="pro-restore" class="row-btn">Restore Google Play purchase</button><small>Billed monthly by Google Play. Cancel anytime through <a href="https://play.google.com/store/account/subscriptions">Google Play subscriptions</a>. Pro unlocks only after secure verification.</small></div><div id="founder-claim" class="pro-offer" hidden><b>Founding tester access</b><p>Your earlier Android installation may qualify for complimentary Pro. Enter your one-time founder code to confirm it securely.</p><input id="founder-code" type="text" autocomplete="off" placeholder="Founding tester code" aria-label="Founding tester code"/><button type="button" id="founder-activate" class="row-btn">Activate complimentary Pro</button></div><p id="pro-billing-status" role="status" aria-live="polite">Checking Pro access…</p>
+    <div class="pro-offer" id="heat-pro-offer" hidden><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark" id="pro-price">$1.99/month</span></div><p>Unlock traffic-camera map pins and speed, red-light and monitoring alerts, full-strength heatmap shading, and year, time-of-day and weekday filters. School-zone and work-zone alerts stay free. Your free preview stays available.</p><button type="button" id="heat-upgrade" class="pro-upgrade" disabled>Subscribe with Google Play</button><button type="button" id="pro-restore" class="row-btn">Restore Google Play purchase</button><small>Billed monthly by Google Play. Cancel anytime through <a href="https://play.google.com/store/account/subscriptions">Google Play subscriptions</a>. Pro unlocks only after secure verification.</small></div><div id="founder-claim" class="pro-offer" hidden><b>Founding tester access</b><p>Your earlier Android installation may qualify for complimentary Pro. Enter your one-time founder code to confirm it securely.</p><input id="founder-code" type="text" autocomplete="off" placeholder="Founding tester code" aria-label="Founding tester code"/><button type="button" id="founder-activate" class="row-btn">Activate complimentary Pro</button></div><p id="pro-billing-status" role="status" aria-live="polite">Checking Pro access…</p>
     <small id="heat-status">Loading stop history…</small>
     <p class="heat-disclaimer">Official data can be months or years behind. Many places are beat-level only. Coverage is incomplete and uneven: stronger where a city already publishes, thinner elsewhere.</p>
     <div class="heat-ramp" aria-label="Stop history color scale, fewer to more historical stops"><span><i id="heat-sw-1"></i>Fewer</span><span><i id="heat-sw-2"></i></span><span><i id="heat-sw-3"></i></span><span><i id="heat-sw-4"></i>More</span></div>
@@ -262,14 +265,14 @@
     <label class="field">Year<select id="heat-year-set" aria-label="Year"><option value="">All years</option></select></label>
     <label class="field">Time of day<select id="heat-tod-set" aria-label="Time of day"><option value="">All hours</option></select></label>
     <label class="field">Day of week<select id="heat-dow-set" aria-label="Day of week"><option value="">All days</option></select></label>
-    <small id="heat-filter-note">Pro filters require verified Google Play access or a confirmed founding-tester grant. The free preview uses all recorded periods.</small>
+    <small id="heat-filter-note">Pro filters will be available after verified subscription billing is connected. The free preview uses all recorded periods.</small>
   </div>
   <h3 class="group-title">Sources</h3>
   <div class="group"><details id="illinois-agencies"><summary>Illinois stops by reporting agency · 2025</summary></details></div>
   <div class="group"><div id="heat-sources" class="heat-sources"></div></div>
   <h3 class="group-title">Listed, not shaded</h3>
   <div class="group"><div id="heat-gaps" class="heat-sources"></div></div>
-  <p class="heat-subnote">Historical records have uneven coverage and may be years old. Pricing and availability are determined by Google Play for your account and region. Source links and attribution remain available to everyone.</p>
+  <p class="heat-subnote">Historical records have uneven coverage and may be years old. Subscription purchases are not enabled in this preview build; $1.99/month is the planned U.S. price. Source links and attribution remain available to everyone.</p>
 </aside>
 <aside id="updates" class="drawer" aria-label="Updates" aria-hidden="true">
   <header><h2>Updates</h2><button id="close-updates" class="icon-btn" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>

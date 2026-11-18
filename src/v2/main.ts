@@ -36,7 +36,7 @@ import { nativeAppPresent, applyPlatformSettings } from './platform';
 import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
-import { FOUNDING_TESTER_LABEL, loadProEntitlement, readNativeFirstInstallTime } from '../entitlement/pro';
+import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
 import { PlayProClient, type ProStatus } from '../entitlement/playBilling';
 
 // A single map and BLE scanning session serve Patrol and Navigation.
@@ -310,7 +310,7 @@ async function choosePlace(place:Destination){
 const fusion = new ScanFusion();
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const store = new LocalReportStore();
-mountLegend($('map-legend'));
+mountLegend($('map-legend'), localStorage, { trafficCameras: false });
 const map = new MapView($('map'), undefined, { dark: document.documentElement.dataset.theme !== 'light', legend: false, layersControl: false, zoomControl: false, waitForLocation: true, initial3D: savedMap3D() });
 map.onPresentationChange = state => {
   const loading = document.getElementById('map-startup');
@@ -707,8 +707,12 @@ const FLOCK_URL = `${import.meta.env.BASE_URL}data/flock/`;
   const on = localStorage.getItem('pr.flockmap') !== '0'; if (fb) { fb.checked = on; fb.onchange = () => setFlock(fb.checked); }
   if(on) deferredMapLayers.push(() => { if(fb?.checked) setFlock(true); }); }
 // Traffic enforcement cameras (OSM + city open data), lazy 5° tiles, with their own Settings page and on-device alerts.
+// Map pins and paid camera alerts (speed, red-light, monitoring) require Pro. Fail-closed for those until entitlement resolves.
+// School-zone and work-zone alerts, and their settings toggles, stay free for everyone. Flock cameras above are not gated.
 const TC_URL = `${import.meta.env.BASE_URL}data/traffic-cams/`;
 const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
+let trafficCamerasPro = false;
+let applyTrafficCamEntitlement = () => {};
 { const ck = (id: string) => document.getElementById(id) as HTMLInputElement;
   const sel = (id: string) => document.getElementById(id) as HTMLSelectElement;
   const st = document.getElementById('tc-status'), sum = document.getElementById('tc-summary');
@@ -716,16 +720,38 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
   const openTc = (o: boolean) => { page.classList.toggle('open', o); page.setAttribute('aria-hidden', String(!o)); };
   $('open-tc').onclick = () => openTc(true); $('back-tc').onclick = () => openTc(false);
   $('close-settings').addEventListener('click', () => openTc(false)); $('scrim').addEventListener('click', () => openTc(false));
+  const unlocked = () => trafficCamerasUnlocked({ pro: trafficCamerasPro });
   const apply = () => {
     saveTcSettings(tcSet);
     map.setTrafficCamTypes(new Set(TC_TYPES.filter(t => tcSet.types[t])));
-    for (const t of TC_TYPES) { const a = ck(`tc-alert-${t}`); a.disabled = !tcSet.types[t] || !tcSet.show; }
+    const pro = unlocked();
+    for (const t of TC_TYPES) {
+      const a = ck(`tc-alert-${t}`);
+      // School-zone and work-zone alert toggles stay available without Pro and without the map layer.
+      a.disabled = isFreeTrafficCameraAlertType(t) ? false : (!pro || !tcSet.types[t] || !tcSet.show);
+    }
+    for (const t of TC_TYPES) { ck(`tc-show-${t}`).disabled = !pro; }
+    ck('trafficcams').disabled = !pro;
+    ck('tc-ahead').disabled = false;
+    for (const id of ['tc-alerts-on', 'tc-distance', 'tc-style']) sel(id).disabled = false;
     $('tc-alerts').classList.toggle('off', !tcSet.alerts); $('tc-types').classList.toggle('off', !tcSet.show);
-    const n = TC_TYPES.filter(t => alertsFor(tcSet, t)).length;
-    if (sum) sum.textContent = !tcSet.show ? 'Hidden · no alerts' : `Shown · ${tcSet.alerts ? `alerts on (${n} type${n === 1 ? '' : 's'})` : 'alerts off'}`;
+    const n = TC_TYPES.filter(t => alertsFor(tcSet, t, pro)).length;
+    if (sum) {
+      const alertBit = !tcSet.alerts || n === 0 ? 'school/work alerts off' : 'school/work alerts on';
+      if (!pro) sum.textContent = `Pins locked · ${alertBit}`;
+      else if (!tcSet.show) sum.textContent = n ? `Hidden · alerts on (${n} type${n === 1 ? '' : 's'})` : 'Hidden · no alerts';
+      else sum.textContent = `Shown · ${tcSet.alerts ? `alerts on (${n} type${n === 1 ? '' : 's'})` : 'alerts off'}`;
+    }
   };
-  const show = (on: boolean) => map.showTrafficCams(on, TC_URL).then(() => { const i = map.trafficCamInfo; if (st && i) st.textContent = `${i.count.toLocaleString()} US traffic cameras · built ${i.generated.slice(0, 10)} · OSM as of ${i.sources.find(s => s.id === 'osm')?.last_updated ?? '?'} · zoom in to see them`; })
-    .catch(e => { if (st) st.textContent = `Traffic camera layer unavailable (${(e as Error).message})`; });
+  const show = (on: boolean) => {
+    if (!unlocked()) {
+      void map.showTrafficCams(false, TC_URL);
+      if (st) st.textContent = 'Map pins and speed, red-light and monitoring alerts are included with Patrol Radar Pro. School-zone and work-zone alerts are free. Open Patrol Radar Pro settings for subscription availability.';
+      return Promise.resolve();
+    }
+    return map.showTrafficCams(on, TC_URL).then(() => { const i = map.trafficCamInfo; if (st && i) st.textContent = `${i.count.toLocaleString()} US traffic cameras · built ${i.generated.slice(0, 10)} · OSM as of ${i.sources.find(s => s.id === 'osm')?.last_updated ?? '?'} · zoom in to see them`; })
+      .catch(e => { if (st) st.textContent = `Traffic camera layer unavailable (${(e as Error).message})`; });
+  };
   const m = ck('trafficcams'); m.checked = tcSet.show; m.onchange = () => { tcSet.show = m.checked; apply(); void show(m.checked); };
   for (const t of TC_TYPES) {
     const v = ck(`tc-show-${t}`); v.checked = tcSet.types[t]; v.onchange = () => { tcSet.types[t] = v.checked; apply(); };
@@ -735,7 +761,19 @@ const tcSet = loadTcSettings(), tcAlerter = new TrafficAlerter();
   const dist = sel('tc-distance'); dist.value = String(tcSet.distance); dist.onchange = () => { tcSet.distance = dist.value === 'auto' ? 'auto' : (+dist.value as AlertDistance); apply(); };
   const ah = ck('tc-ahead'); ah.checked = tcSet.aheadOnly; ah.onchange = () => { tcSet.aheadOnly = ah.checked; apply(); };
   const sty = sel('tc-style'); sty.value = tcSet.style; sty.onchange = () => { tcSet.style = sty.value as AlertStyle; apply(); if (tcSet.style === 'sound') void ping.unlock().then(() => ping.play('soft')); else if (tcSet.style === 'vibrate') navigator.vibrate?.(120); };
-  apply(); if (tcSet.show) deferredMapLayers.push(() => { if(tcSet.show) void show(true); });
+  applyTrafficCamEntitlement = () => {
+    const pro = unlocked();
+    page.classList.toggle('pro-locked', !pro);
+    const offer = document.getElementById('tc-pro-offer');
+    if (offer) offer.hidden = pro;
+    apply();
+    void show(pro && tcSet.show);
+    mountLegend($('map-legend'), localStorage, { trafficCameras: pro });
+    updateSettingsSummaries();
+  };
+  $('tc-upgrade').onclick = () => { openTc(false); $('open-heat').click(); };
+  applyTrafficCamEntitlement();
+  if (tcSet.show) deferredMapLayers.push(() => { if (tcSet.show && unlocked()) void show(true); });
 }
 // Historical Stop History preview and Pro presentation. Purchases must not be enabled without verified Play Billing.
 // Illinois agency totals stay free. Chicago 2025 beats, Springfield 2025 beats and Champaign 2025 districts are ordinary Stop History beats: lighter all-period preview, full shading and period filters with Pro.
@@ -752,6 +790,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   let legacyFounderHint = false;
   let founderChecked = false;
   let proClient: PlayProClient | undefined;
+  let purchaseAvailable = false;
   const proFields = ['heat-year-set', 'heat-tod-set', 'heat-dow-set'].map(id => $(id) as HTMLSelectElement);
   const proLabels = new Map(proFields.map(field => [field, field.getAttribute('aria-label') ?? '']));
   const offer = document.getElementById('heat-pro-offer');
@@ -765,8 +804,10 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   const applyVerified = (status: ProStatus) => {
     hasVerifiedPro = status.pro;
     foundingTester = status.foundingTester;
+    trafficCamerasPro = status.pro;
     presentPro();
     applyFilter();
+    applyTrafficCamEntitlement();
     setBillingMessage(status.foundingTester ? 'Founding tester: complimentary Pro confirmed.' :
       status.pro ? 'Pro active and verified with Google Play.' : 'Free preview active.');
   };
@@ -779,7 +820,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     }
     if (offer) offer.hidden = !nativePlugin() || !founderChecked || hasVerifiedPro || legacyFounderHint;
     founderClaim.hidden = hasVerifiedPro || !legacyFounderHint;
-    upgrade.disabled = !proClient || hasVerifiedPro || legacyFounderHint;
+    upgrade.disabled = !purchaseAvailable || !proClient || hasVerifiedPro || legacyFounderHint;
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
     if (filterNote) filterNote.hidden = hasVerifiedPro;
   };
@@ -871,7 +912,8 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
         const product = await proClient.getProduct();
         if (product.productId === 'patrol_radar_pro' && product.basePlanId === 'monthly') {
           $('pro-price').textContent = product.price + '/month';
-          upgrade.disabled = false;
+          purchaseAvailable = true;
+          presentPro();
         }
       }
     } catch (error) {
@@ -887,11 +929,11 @@ function showTcBanner(a: TcAlert) {
   b.hidden = false; clearTimeout(tcBannerT); tcBannerT = window.setTimeout(() => { b.hidden = true; }, 8000);
   if (tcSet.style === 'sound') { ping.play('normal'); navigator.vibrate?.([200, 100, 200]); } else if (tcSet.style === 'vibrate') navigator.vibrate?.([200, 100, 200]);
 }
-/** Called for every GPS fix. Position/heading stay in memory for this check only; nothing is stored or sent. */
+/** Called for every GPS fix, including Android background/foreground while the WebView is kept alive. School-zone and work-zone alerts do not require Pro. Position/heading stay in memory for this check only; nothing is stored or sent. */
 async function checkTrafficCams(f: Fix) {
-  if (!document.body.dataset.experience || tcBusy || !tcSet.alerts || !tcSet.show) { tcAlerter.heading(f); return; }
+  if (!document.body.dataset.experience || tcBusy || !tcSet.alerts) { tcAlerter.heading(f); return; }
   tcBusy = true;
-  try { const cams = await map.trafficCamsNear(TC_URL, f.lat, f.lng, 700); const a = tcAlerter.check(f, cams, tcSet, travel().mode); if (a) showTcBanner(a); }
+  try { const cams = await map.trafficCamsNear(TC_URL, f.lat, f.lng, 700); const a = tcAlerter.check(f, cams, tcSet, travel().mode, trafficCamerasPro); if (a) showTcBanner(a); }
   catch { /* data unavailable: no alert */ } finally { tcBusy = false; }
 }
 (window as any).__tcTest = (f: Fix) => checkTrafficCams(f); // for screenshots / field tests
@@ -910,11 +952,11 @@ function updateSettingsSummaries() {
   const modeLabel = ({ lowPower: 'Saver', balanced: 'Balanced', lowLatency: 'Fastest' } as Record<string, string>)[mode.value] ?? mode.value;
   $('settings-mode').textContent = isNativeApp ? `Scan mode: ${modeLabel}` : `Scanner: ${sel.options[sel.selectedIndex]?.text ?? sel.value}`;
   $('scanning-section-summary').textContent = `${isNativeApp ? modeLabel + ' · ' : ''}All devices · police alert filters active`;
-  $('alerts-section-summary').textContent = `Police ping ${soundBox.checked ? 'on' : 'off'} · camera alerts in Map layers`;
+  $('alerts-section-summary').textContent = `Police ping ${soundBox.checked ? 'on' : 'off'} · ${trafficCamerasUnlocked({ pro: trafficCamerasPro }) ? 'camera alerts in Map layers' : 'school/work camera alerts free'}`;
   $('crowd-section-summary').textContent = `Sharing ${shareBox.checked ? 'on' : 'off'} · crowd layer ${$<HTMLInputElement>('crowd').checked ? 'on' : 'off'}`;
   $('travel-section-summary').textContent = `${$<HTMLSelectElement>('travelmode').value === 'foot' ? 'On foot' : 'Car'} · 3D buildings ${$<HTMLInputElement>('map3d').checked ? 'on' : 'off'}`;
   $('appearance-summary').textContent = ({ light: 'Light', dark: 'Dark', system: 'Match system' } as Record<string, string>)[$<HTMLSelectElement>('theme').value] ?? 'Match system';
-  $('layers-section-summary').textContent = `Flock cameras ${$<HTMLInputElement>('flockmap').checked ? 'on' : 'off'} · traffic cameras · Stop History`;
+  $('layers-section-summary').textContent = `Flock cameras ${$<HTMLInputElement>('flockmap').checked ? 'on' : 'off'} · ${trafficCamerasUnlocked({ pro: trafficCamerasPro }) ? (tcSet.show ? 'traffic cameras on' : 'traffic cameras off') : 'pins locked · school/work alerts free'} · Stop History`;
 }
 $('settings').addEventListener('change', updateSettingsSummaries);
 updateSettingsSummaries();

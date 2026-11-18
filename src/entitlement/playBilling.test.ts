@@ -15,6 +15,10 @@ describe('Play subscription security boundaries', () => {
     expect(app).toContain('void proClient.purchase()');
     expect(app).not.toContain('hasVerifiedPro = entitlement.pro');
     expect(app).toContain('hasVerifiedPro = status.pro');
+    expect(app).toContain('trafficCamerasPro = status.pro');
+    expect(app).not.toContain('trafficCamerasPro = entitlement.pro');
+    expect(app).toContain('applyTrafficCamEntitlement();');
+    expect(app).toContain('tcAlerter.check(f, cams, tcSet, travel().mode, trafficCamerasPro)');
     expect(plugin).not.toContain('SharedPreferences');
     expect(plugin).not.toMatch(/\bsetPro\s*\(/);
     expect(verifier).toContain('/purchases/subscriptionsv2/tokens/');
