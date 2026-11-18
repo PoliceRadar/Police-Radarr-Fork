@@ -102,3 +102,27 @@ export async function readNativeFirstInstallTime(plugin: { firstInstallTime?: ()
   const result = await plugin.firstInstallTime();
   return result?.firstInstallTime ?? null;
 }
+
+/** School-zone and work-zone upcoming-camera alerts stay free for everyone. */
+export const FREE_TRAFFIC_CAMERA_ALERT_TYPES = ['school_zone', 'work_zone'] as const;
+export type FreeTrafficCameraAlertType = (typeof FREE_TRAFFIC_CAMERA_ALERT_TYPES)[number];
+
+export function isFreeTrafficCameraAlertType(type: string): type is FreeTrafficCameraAlertType {
+  return (FREE_TRAFFIC_CAMERA_ALERT_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Traffic-camera map pins and paid camera alerts (speed, red-light, monitoring)
+ * require Pro. Founding testers already have `pro: true`. The web app stays
+ * locked for those features unless a future verified purchase is passed in.
+ * School-zone and work-zone alerts are not gated. Flock cameras, police
+ * detection, and BLE scanning are not gated here.
+ */
+export function trafficCamerasUnlocked(entitlement: Pick<ProEntitlement, 'pro'>): boolean {
+  return entitlement.pro === true;
+}
+
+/** Upcoming-camera alerts: school-zone and work-zone are free; other types need Pro. */
+export function trafficCameraAlertUnlocked(entitlement: Pick<ProEntitlement, 'pro'>, type: string): boolean {
+  return isFreeTrafficCameraAlertType(type) || trafficCamerasUnlocked(entitlement);
+}

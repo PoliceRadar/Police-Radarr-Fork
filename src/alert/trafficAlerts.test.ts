@@ -21,18 +21,18 @@ describe('traffic camera alerts', () => {
   });
   it('alerts once for a camera ahead, not behind, and not again within 10 min', () => {
     const a = new TrafficAlerter(); const cams = [cam(north(250), me.lng), cam(north(-200), me.lng)];
-    const r = a.check({ ...me, heading: 0, speed: 12, t: 0 }, cams, S(), 'car');
+    const r = a.check({ ...me, heading: 0, speed: 12, t: 0 }, cams, S(), 'car', true);
     expect(r?.cam.lat).toBeCloseTo(north(250)); expect(Math.round(r!.distM)).toBe(250);
-    expect(a.check({ ...me, heading: 0, speed: 12, t: 60_000 }, cams, S(), 'car')).toBeNull();
-    expect(a.check({ ...me, heading: 0, speed: 12, t: REPEAT_MS + 1 }, cams, S(), 'car')).not.toBeNull();
+    expect(a.check({ ...me, heading: 0, speed: 12, t: 60_000 }, cams, S(), 'car', true)).toBeNull();
+    expect(a.check({ ...me, heading: 0, speed: 12, t: REPEAT_MS + 1 }, cams, S(), 'car', true)).not.toBeNull();
   });
   it('alerts off, hidden layer or hidden type means zero alerts', () => {
     const cams = [cam(north(100), me.lng)]; const f = { ...me, heading: 0, speed: 10, t: 0 };
-    expect(new TrafficAlerter().check(f, cams, S({ alerts: false }), 'car')).toBeNull();
-    expect(new TrafficAlerter().check(f, cams, S({ show: false }), 'car')).toBeNull();
-    expect(new TrafficAlerter().check(f, cams, S({ types: { ...DEFAULT_TC_SETTINGS.types, red_light: false } }), 'car')).toBeNull();
-    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'monitor')], S(), 'car')).toBeNull();
-    expect(alertsFor(S(), 'speed')).toBe(true);
+    expect(new TrafficAlerter().check(f, cams, S({ alerts: false }), 'car', true)).toBeNull();
+    expect(new TrafficAlerter().check(f, cams, S({ show: false }), 'car', true)).toBeNull();
+    expect(new TrafficAlerter().check(f, cams, S({ types: { ...DEFAULT_TC_SETTINGS.types, red_light: false } }), 'car', true)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'monitor')], S(), 'car', true)).toBeNull();
+    expect(alertsFor(S(), 'speed', true)).toBe(true);
   });
   it('ahead check uses camera direction when known', () => {
     expect(isAhead(me, 0, cam(north(200), me.lng, 'speed', 0))).toBe(true);
@@ -41,8 +41,22 @@ describe('traffic camera alerts', () => {
     expect(isAhead(me, 90, cam(north(200), me.lng))).toBe(false);
   });
   it('derives heading from movement when GPS heading is missing', () => {
-    const a = new TrafficAlerter(); a.check({ ...me, t: 0 }, [], S(), 'car');
+    const a = new TrafficAlerter(); a.check({ ...me, t: 0 }, [], S(), 'car', true);
     const h = a.heading({ lat: north(30), lng: me.lng, t: 2000 }); expect(h).toBeCloseTo(0, 0);
     expect(roundDist(248)).toBe('250 m'); expect(roundDist(42)).toBe('40 m');
+  });
+  it('non-Pro and web keep school-zone and work-zone alerts free, and lock paid types', () => {
+    const f = { ...me, heading: 0, speed: 10, t: 0 };
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'red_light')], S(), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'speed')], S(), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'monitor')], S({ alertTypes: { ...DEFAULT_TC_SETTINGS.alertTypes, monitor: true } }), 'car', false)).toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'school_zone')], S(), 'car', false)).not.toBeNull();
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'work_zone')], S(), 'car', false)).not.toBeNull();
+    // Free alerts still work when the Pro-locked map layer is hidden.
+    expect(new TrafficAlerter().check(f, [cam(north(100), me.lng, 'school_zone')], S({ show: false }), 'car', false)).not.toBeNull();
+    expect(alertsFor(S({ show: false }), 'school_zone', false)).toBe(true);
+    expect(alertsFor(S({ show: false }), 'work_zone', false)).toBe(true);
+    expect(alertsFor(S(), 'speed', false)).toBe(false);
+    expect(alertsFor(S(), 'red_light', true)).toBe(true);
   });
 });

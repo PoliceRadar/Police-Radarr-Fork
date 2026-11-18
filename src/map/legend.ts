@@ -36,14 +36,18 @@ export function loadLegendState(s: Pick<Storage, 'getItem'> | undefined): Legend
   try { const v = JSON.parse(s?.getItem(LEGEND_KEY) ?? ''); if (v && typeof v.open === 'boolean') return { open: v.open, cats: v.cats ?? {} }; } catch { /* default */ }
   return { open: false, cats: {} };
 }
+/** Traffic-camera symbols are a Pro feature; Flock stays in the peek row for everyone. */
+export function legendCategories(opts: { trafficCameras?: boolean } = {}): LegendCat[] {
+  return opts.trafficCameras === false ? LEGEND.filter(c => c.id !== 'tcam') : LEGEND;
+}
 export function legendHtml(st: LegendState, cats = LEGEND): string {
   return `<details class="lg"${st.open ? ' open' : ''}><summary class="lg-head"><span class="lg-top"><span>Legend</span><span class="lg-chev" aria-hidden="true"></span></span><span class="lg-peek">${PEEK.map(i => `<span>${i.sw}${i.label}</span>`).join('')}</span></summary><div class="lg-body">${
     cats.map(c => `<details class="lg-cat" data-cat="${c.id}"${st.cats[c.id] === true ? ' open' : ''}><summary>${c.title}<span class="lg-chev" aria-hidden="true"></span></summary>${`<div class="lg-grid">${c.items.map(i => `<div class="lg-row">${i.sw}<span>${i.label}</span></div>`).join('')}</div>`}</details>`).join('')
   }</div></details>`;
 }
 /** Render into el and persist toggles. */
-export function mountLegend(el: HTMLElement, store: Storage | undefined = globalThis.localStorage) {
-  const st = loadLegendState(store); el.innerHTML = legendHtml(st);
+export function mountLegend(el: HTMLElement, store: Storage | undefined = globalThis.localStorage, opts: { trafficCameras?: boolean } = {}) {
+  const st = loadLegendState(store); el.innerHTML = legendHtml(st, legendCategories(opts));
   const save = () => { try { store?.setItem(LEGEND_KEY, JSON.stringify(st)); } catch { /* ignore */ } };
   const top = el.querySelector('details.lg') as HTMLDetailsElement;
   top.addEventListener('toggle', () => { st.open = top.open; save(); });
