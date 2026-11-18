@@ -456,6 +456,17 @@ details.group{margin-top:14px}
 .mode-choice>span:last-child{font-size:26px}
 .mode-return{position:fixed;right:calc(12px + var(--sr));top:calc(64px + var(--st));z-index:1110;display:flex;align-items:center;gap:8px;min-height:48px;color:#fff;background:#c51c2e;border:1px solid #ff737d;border-radius:14px;padding:11px 16px;font-size:14px;font-weight:800;box-shadow:0 6px 22px #000a,0 0 0 2px #ff4b5c33}
 .mode-return:focus-visible{outline:3px solid white;outline-offset:3px}
+/* Glanceable readout below Change Mode; detection and score come from the existing live cards. */
+.live-hit{position:fixed;z-index:1101;top:calc(124px + var(--st));right:calc(12px + var(--sr));width:min(240px,calc(100vw - 24px - var(--sl) - var(--sr)));padding:11px 13px;border-radius:14px;border:1px solid var(--line);border-left:4px solid var(--acc);background:var(--panel-solid);color:var(--txt);box-shadow:var(--shadow);pointer-events:none}
+.live-hit[hidden]{display:none}
+.live-hit-heading{display:flex;justify-content:space-between;gap:6px;align-items:center;color:var(--mut);font-size:10px;font-weight:750;letter-spacing:.06em}
+.live-hit-heading small{font-size:10px;letter-spacing:0}
+.live-hit-reading{display:flex;align-items:center;gap:9px;margin-top:4px;line-height:1.2}
+.live-hit-reading strong{min-width:0;flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-hit-reading b{flex:none;font-size:22px;font-variant-numeric:tabular-nums;color:var(--link)}
+.live-hit-foot{display:block;margin-top:5px;color:var(--mut);font-size:10px}
+body.has-live-hit[data-experience="patrol"] #map-legend{top:calc(232px + var(--st))}
+body[data-experience="navigation"] .live-hit{display:none}
 body[data-experience="patrol"] #map-legend{top:calc(126px + var(--st))}
 body[data-navigation-driving="true"] .mode-return{display:none!important}
 /* Navigation dock: stay at thumb level and keep the map visible. */
