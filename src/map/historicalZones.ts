@@ -61,7 +61,7 @@ export function buildActivityZones(features: readonly BeatFeature[], yearBase: n
     const equal = sorted.filter(r => r === rate).length;
     const percentile = sorted.length > 1 ? (below + (equal - 1) / 2) / (sorted.length - 1) : 0;
     const level: ActivityLevel = comparable.length < 4 || count === 0 || rate === 0 ? 'insufficient'
-      : percentile >= .9 ? 'very-high' : percentile >= .7 ? 'high' : percentile >= .3 ? 'typical' : 'low';
+      : percentile >= .9 ? 'very-high' : percentile >= 2 / 3 ? 'high' : percentile >= .3 ? 'typical' : 'low';
     return {
       id: f.properties.id ?? f.properties.label ?? 'unknown',
       label: f.properties.label ?? 'Mapped historical area',
@@ -86,9 +86,9 @@ export class ActivityZoneAlertGate {
     if (id === this.activeId) return false;
     this.activeId = id;
     if (!enabled || !zone || (zone.level !== 'very-high' && !(includeHigh && zone.level === 'high'))) return false;
-    if (now - this.lastAlertAt < 90_000 || now - (this.lastByArea.get(id) ?? -Infinity) < 20 * 60_000) return false;
+    if (now - this.lastAlertAt < 90_000 || now - (this.lastByArea.get(zone.id) ?? -Infinity) < 20 * 60_000) return false;
     this.lastAlertAt = now;
-    this.lastByArea.set(id, now);
+    this.lastByArea.set(zone.id, now);
     return true;
   }
   resetPosition() { this.activeId = null; }
