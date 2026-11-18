@@ -154,7 +154,7 @@ describe('install-date grandfathering', () => {
     expect(html).toContain('id="tc-upgrade"');
     expect(html).toContain('Unlock traffic-camera map pins and upcoming-camera alerts for speed, red-light and traffic-monitoring cameras');
     expect(html).toContain('School-zone and work-zone alerts are included for everyone');
-    expect(html).toContain('Explore the free Stop History preview, school- and work-zone alerts, and planned features');
+    expect(html).toContain('Pro camera pins, paid camera alerts, and Stop History filters; school/work-zone alerts stay free');
     expect(html).toContain('Unlock traffic-camera map pins and speed, red-light and monitoring alerts');
     expect(html).toContain('School-zone and work-zone alerts stay free');
     expect(html).toContain('id="tc-alerts-on"');

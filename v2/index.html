@@ -166,7 +166,7 @@
 
   </details>
 
-  <button type="button" id="open-pro-settings" class="settings-pro"><span><b>Patrol Radar Pro <span class="pro-mark">PRO</span></b><small>Explore the free Stop History preview, school- and work-zone alerts, and planned features</small></span><i aria-hidden="true">›</i></button>
+  <button type="button" id="open-pro-settings" class="settings-pro"><span><b>Patrol Radar Pro <span class="pro-mark">PRO</span></b><small>Pro camera pins, paid camera alerts, and Stop History filters; school/work-zone alerts stay free</small></span><i aria-hidden="true">›</i></button>
   <p id="founding-tester" class="founding-tester" hidden>Founding tester: Pro unlocked</p>
 
   <details class="settings-section" id="help-section"><summary><span><b>Help &amp; privacy</b><small>Setup tips, privacy and diagnostics</small></span></summary>
@@ -213,7 +213,7 @@
 </aside>
 <aside id="tc-settings" class="drawer sub" aria-label="Traffic cameras" aria-hidden="true">
   <header><button id="back-tc" class="icon-btn" aria-label="Back to Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Traffic cameras <span class="pro-mark">PRO</span></h2><span class="hdr-spacer"></span></header>
-  <div class="pro-offer" id="tc-pro-offer"><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark">$1.99/month</span></div><p>Unlock traffic-camera map pins and upcoming-camera alerts for speed, red-light and traffic-monitoring cameras. School-zone and work-zone alerts are included for everyone.</p><button type="button" id="tc-upgrade" class="pro-upgrade">Explore Patrol Radar Pro</button><small>Preview of upcoming subscription. Purchasing is not available yet.</small></div>
+  <div class="pro-offer" id="tc-pro-offer"><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark">$1.99/month</span></div><p>Unlock traffic-camera map pins and upcoming-camera alerts for speed, red-light and traffic-monitoring cameras. School-zone and work-zone alerts are included for everyone.</p><button type="button" id="tc-upgrade" class="pro-upgrade">Explore Patrol Radar Pro</button><small>Open Pro settings to check Google Play subscription availability.</small></div>
   <div class="tc-pro-controls">
   <h3 class="group-title">On the map</h3>
   <div class="group">
@@ -254,7 +254,7 @@
   <h3 class="group-title">On the map</h3>
   <div class="group">
     <label class="switch"><input type="checkbox" id="stopheat" checked/><span></span><em>Show historical stops<small>Free preview shows lighter historical shading. This is not live police activity.</small></em></label>
-    <div class="pro-offer" id="heat-pro-offer"><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark">$1.99/month</span></div><p>Unlock traffic-camera map pins and speed, red-light and monitoring alerts, full-strength heatmap shading, and year, time-of-day and weekday filters. School-zone and work-zone alerts stay free. Your free Stop History preview stays available.</p><button type="button" id="heat-upgrade" class="pro-upgrade">Explore Patrol Radar Pro</button><small>Preview of upcoming subscription. Purchasing is not available yet.</small></div>
+    <div class="pro-offer" id="heat-pro-offer" hidden><div class="pro-offer-head"><b>Patrol Radar Pro</b><span class="pro-mark" id="pro-price">$1.99/month</span></div><p>Unlock traffic-camera map pins and speed, red-light and monitoring alerts, full-strength heatmap shading, and year, time-of-day and weekday filters. School-zone and work-zone alerts stay free. Your free preview stays available.</p><button type="button" id="heat-upgrade" class="pro-upgrade" disabled>Subscribe with Google Play</button><button type="button" id="pro-restore" class="row-btn">Restore Google Play purchase</button><small>Billed monthly by Google Play. Cancel anytime through <a href="https://play.google.com/store/account/subscriptions">Google Play subscriptions</a>. Pro unlocks only after secure verification.</small></div><div id="founder-claim" class="pro-offer" hidden><b>Founding tester who reinstalled?</b><p>Founding testers keep Pro automatically on this phone. If you moved to a new phone or Pro did not come back after reinstalling, enter the one-time founder code we sent you.</p><input id="founder-code" type="text" autocomplete="off" placeholder="Founding tester code" aria-label="Founding tester code"/><button type="button" id="founder-activate" class="row-btn">Activate complimentary Pro</button></div><p id="pro-billing-status" role="status" aria-live="polite">Checking Pro access…</p>
     <small id="heat-status">Loading stop history…</small>
     <p class="heat-disclaimer">Official data can be months or years behind. Many places are beat-level only. Coverage is incomplete and uneven: stronger where a city already publishes, thinner elsewhere.</p>
     <div class="heat-ramp" aria-label="Stop history color scale, fewer to more historical stops"><span><i id="heat-sw-1"></i>Fewer</span><span><i id="heat-sw-2"></i></span><span><i id="heat-sw-3"></i></span><span><i id="heat-sw-4"></i>More</span></div>

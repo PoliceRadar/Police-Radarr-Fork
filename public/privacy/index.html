@@ -2,8 +2,8 @@
 <title>Patrol Radar – Privacy Policy</title>
 <style>body{font:16px/1.55 system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#e8e8e8;background:#111}a{color:#7cc4ff}h2{margin-top:1.8rem}</style></head><body>
 <h1>Patrol Radar – Privacy Policy</h1>
-<p><em>Updated November 9, 2026. Applies to the Patrol Radar Android app (io.github.missionaryj.patrolradar) and the web app at missionaryj.github.io/patrol-radar.</em></p>
-<p>Patrol Radar is a public-awareness tool. It listens passively for Bluetooth Low Energy (BLE) advertisements that nearby equipment already broadcasts in public and shows likely public-safety equipment on a coarse map. There are no accounts (except the optional anonymous chat account described below), no ads, no analytics, and no tracking SDKs.</p>
+<p><em>Updated November 17, 2026. Applies to the Patrol Radar Android app (io.github.missionaryj.patrolradar) and the web app at missionaryj.github.io/patrol-radar.</em></p>
+<p>Patrol Radar is a public-awareness tool. It listens passively for Bluetooth Low Energy (BLE) advertisements that nearby equipment already broadcasts in public and shows likely public-safety equipment on a coarse map. There are no ads or analytics. Optional City Chat and Play subscription verification use a pseudonymous Supabase account ID; payment details are handled by Google Play.</p>
 
 <h2>Bluetooth</h2>
 <ul>
@@ -45,6 +45,17 @@
 <li>Chat is hosted on Supabase (supabase.com) and sent over HTTPS. Supabase processes the data on our behalf and, like any web service, sees your IP address when you connect.</li>
 <li>We may share chat information with authorities when the law requires it or when someone’s safety is at risk. Because chat is anonymous, this is limited to the message, its time, the city room and the random account ID.</li>
 </ul>
+<h2>Patrol Radar Pro and Google Play subscriptions (Android only)</h2>
+<p>If you open the Pro purchase screen, the app uses Google Play Billing for checkout and subscription restoration. Google Play, not Patrol Radar, collects payment card and billing details. The recurring U.S. monthly price is $1.99; other regions use the exact price displayed by Google Play.</p>
+<ul>
+<li>For purchase verification, the app creates or reuses a pseudonymous Supabase user ID. The app sends the Google Play purchase token over HTTPS to a secured Supabase Edge Function. Our server asks Google Play for subscription status and expiry and stores the purchase token, a hash, your pseudonymous ID, the verification time and entitlement status. These records are never publicly readable.</li>
+<li>Google Play sends subscription renewal, expiration, cancellation, hold and refund notices via Google Cloud Pub/Sub, which our server verifies with the Google Play Developer API. A cancellation normally retains Pro through the paid period; a refund/revocation can remove it sooner.</li>
+<li>To restore a subscription or founding-tester access after you reinstall on the same phone, the Android app derives a one-way hash from an identifier Android assigns to Patrol Radar on your device (never the raw identifier). It is attached to Google Play checkout and sent to our server with verification requests. It cannot be used to identify you in other apps.</li>
+<li>Founding testers (installs before November 16, 2026, 7:54 PM Central) keep Pro on their phone automatically. The app sends the install time and the hash above so our server can record a permanent founding grant for your pseudonymous ID. Testers on a new phone can enter a single-use grant code; our server stores only the code hash. Founding grants do not expire because of subscription cancellation.</li>
+<li>The app keeps the last verified Pro status on your device so Pro keeps working offline.</li>
+<li>Subscription status is checked when you open the app or restore purchases. Purchases can be managed or cancelled in <a href="https://play.google.com/store/account/subscriptions">Google Play subscriptions</a>. Uninstalling the app does not cancel a subscription.</li>
+<li>Subscription records are retained as needed for fulfillment, fraud prevention, refunds, disputes and legal obligations. To request deletion or unlinking of your pseudonymous account data, contact us below; legal financial recordkeeping may limit immediate removal. Do not include purchase tokens or sensitive payment information in email.</li>
+</ul>
 <h2>Navigation and Mapbox (optional)</h2>
 <p>Navigation Mode uses Mapbox APIs for address/destination search, directions, traffic-aware routing and guided navigation. When you search for an address or request navigation, Mapbox receives the destination query, relevant coordinates, and network information (such as IP address), and may process location during an active trip. These requests use HTTPS. The app does not use destination searches to upload nearby Bluetooth or Wi-Fi scan observations. For Mapbox's own data practices, see the <a href="https://www.mapbox.com/legal/privacy">Mapbox Privacy Policy</a>.</p>
 <p>Navigation is optional: choosing Patrol Mode alone does not send route-search or destination data to Mapbox. If you end the trip, the active Mapbox guidance session stops. App-level recent destinations are not currently retained by Patrol Radar.</p>
@@ -55,7 +66,7 @@
 
 <h2>Children</h2><p>The app is not directed to children under 13.</p>
 <h2>Selling or sharing</h2><p>We do not sell personal data or share it for advertising.</p>
-<h2>Deleting your data</h2><p>Clear the session in the app or uninstall it to delete everything stored on your device. Shared crowd reports expire automatically in about 2 hours and cannot be linked back to you. Chat messages delete themselves after 24 hours (reported ones within 7 days), and you can delete your own messages sooner. To have your anonymous chat account and everything linked to it removed, open an issue at the contact link below or email percolatorbiz@gmail.com with the time and city room of one of your messages.</p>
+<h2>Deleting your data</h2><p>Clear the session in the app or uninstall it to delete everything stored on your device. Shared crowd reports expire automatically in about 2 hours and cannot be linked back to you. Chat messages delete themselves after 24 hours (reported ones within 7 days), and you can delete your own messages sooner. To request removal of a pseudonymous chat or Pro account, contact percolatorbiz@gmail.com. We may need to verify account ownership and may retain necessary purchase records for refunds, security or legal requirements. Deletion does not cancel Google Play subscriptions.</p>
 <h2>Contact</h2><p>Questions or requests: <a href="https://github.com/missionaryj/patrol-radar/issues">github.com/missionaryj/patrol-radar/issues</a>.</p>
 <h2>Changes</h2><p>Updates to this policy will be posted on this page with a new effective date.</p>
 </body></html>
