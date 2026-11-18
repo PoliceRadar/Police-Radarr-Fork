@@ -17,6 +17,23 @@ export interface ActivityZone {
 }
 const M_PER_LAT = 111_320;
 const ALL_2025: HeatFilter = { year: 2025, tod: null, dow: null };
+/**
+ * Temporary floor. Champaign currently has 4 beats with 2025 records, so a
+ * city of that size stays rankable. Revisit when more Champaign data is added.
+ * A single citywide total (Urbana) stays insufficient.
+ */
+const MIN_COMPARABLE_BEATS = 4;
+const LEVEL_NAMES: Record<ActivityLevel, string> = {
+  'very-high': 'Very High', high: 'High', typical: 'Typical', low: 'Low', insufficient: 'Insufficient Data',
+};
+export function activityLevelLabel(level: ActivityLevel): string {
+  return LEVEL_NAMES[level];
+}
+/** No saved choice, or any value other than '1', leaves notices off. */
+export function zoneAlertsSavedOn(stored: string | null): boolean {
+  return stored === '1';
+}
+export const HISTORICAL_ZONE_PRO_NOTE = 'Historical activity zone notices are included with Patrol Radar Pro.';
 
 function ringArea(ring: number[][]): number {
   if (ring.length < 3) return 0;
@@ -60,7 +77,7 @@ export function buildActivityZones(features: readonly BeatFeature[], yearBase: n
     const below = sorted.filter(r => r < rate).length;
     const equal = sorted.filter(r => r === rate).length;
     const percentile = sorted.length > 1 ? (below + (equal - 1) / 2) / (sorted.length - 1) : 0;
-    const level: ActivityLevel = comparable.length < 4 || count === 0 || rate === 0 ? 'insufficient'
+    const level: ActivityLevel = comparable.length < MIN_COMPARABLE_BEATS || count === 0 || rate === 0 ? 'insufficient'
       : percentile >= .9 ? 'very-high' : percentile >= 2 / 3 ? 'high' : percentile >= .3 ? 'typical' : 'low';
     return {
       id: f.properties.id ?? f.properties.label ?? 'unknown',
@@ -80,16 +97,50 @@ export class ActivityZoneAlertGate {
   private activeId: string | null = null;
   private lastAlertAt = -Infinity;
   private lastByArea = new Map<string, number>();
-  /** An alert is only emitted when entering a new eligible area, not on every GPS update. */
-  enter(zone: ActivityZone | null, enabled: boolean, includeHigh: boolean, now: number): boolean {
+  /**
+   * An alert is only emitted when entering a new eligible area, not on every GPS update.
+   * `canShow` is decided before any commit: if the banner cannot be shown, an alert that
+   * would otherwise fire does not start the 90-second global or 20-minute per-area cooldown.
+   */
+  enter(zone: ActivityZone | null, enabled: boolean, includeHigh: boolean, now: number, canShow = true): boolean {
     const id = zone?.id ?? null;
     if (id === this.activeId) return false;
+    const eligible = enabled && !!zone && (zone.level === 'very-high' || (includeHigh && zone.level === 'high'));
+    const inCooldown = !!zone && (
+      now - this.lastAlertAt < 90_000 || now - (this.lastByArea.get(zone.id) ?? -Infinity) < 20 * 60_000
+    );
+    if (eligible && !inCooldown && !canShow) return false;
     this.activeId = id;
-    if (!enabled || !zone || (zone.level !== 'very-high' && !(includeHigh && zone.level === 'high'))) return false;
-    if (now - this.lastAlertAt < 90_000 || now - (this.lastByArea.get(zone.id) ?? -Infinity) < 20 * 60_000) return false;
+    if (!eligible || inCooldown || !zone) return false;
     this.lastAlertAt = now;
     this.lastByArea.set(zone.id, now);
     return true;
   }
   resetPosition() { this.activeId = null; }
+}
+export interface ZoneNoticeOptions {
+  /** Verified Pro from hasVerifiedPro / effectiveAccess. The web build never sets this. */
+  pro: boolean;
+  savedOn: boolean;
+  includeHigh: boolean;
+  /** False when Settings, search, or another covering notice means the banner cannot be shown. */
+  canShow: boolean;
+  now: number;
+}
+/**
+ * Non-Pro never alerts and does not touch the gate, so a later verified-Pro
+ * check can still notice the current area. A hidden banner is passed through
+ * and does not consume cooldowns.
+ */
+export function considerHistoricalZoneNotice(gate: ActivityZoneAlertGate, zone: ActivityZone | null, opts: ZoneNoticeOptions): boolean {
+  if (!opts.pro || !opts.savedOn) return false;
+  return gate.enter(zone, true, opts.includeHigh, opts.now, opts.canShow);
+}
+/** Per-area rank and 2025 count are Pro-only. Non-Pro gets the offer note and no local figures. */
+export function historicalZoneStatus(zone: ActivityZone | null, pro: boolean): string {
+  if (!pro) return HISTORICAL_ZONE_PRO_NOTE;
+  if (!zone) return 'No comparable 2025 beat-level records at this location. Not classified as Low.';
+  if (zone.level === 'insufficient')
+    return `${zone.place || zone.label}: area-level ranking unavailable (only citywide or too few comparable 2025 beats).`;
+  return `${zone.label}: ${activityLevelLabel(zone.level)} · ${zone.count.toLocaleString()} recorded stops in 2025 · ranked among ${zone.comparable} local beats/districts.`;
 }
