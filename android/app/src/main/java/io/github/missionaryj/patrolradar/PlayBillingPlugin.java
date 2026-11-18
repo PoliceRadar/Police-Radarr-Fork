@@ -17,6 +17,9 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import android.provider.Settings;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,6 +31,28 @@ public final class PlayBillingPlugin extends Plugin implements PurchasesUpdatedL
     private BillingClient billing;
     private ProductDetails currentProduct;
     private String offerToken;
+    private String accountHash;
+
+    /**
+     * Stable, non-reversible checkout account id: SHA-256 of a fixed salt plus Settings.Secure.ANDROID_ID.
+     * ANDROID_ID is scoped to this app's signing key, user and device and survives reinstall (Android 8+),
+     * so the verifier can recognise a reinstall on the same phone. Never sent raw; 64 hex chars (Play limit).
+     */
+    String accountHash() {
+        if (accountHash != null) return accountHash;
+        try {
+            String id = Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+            if (id == null || id.isEmpty()) return null;
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(("patrol-radar-play-account-v1:" + id).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(64);
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            accountHash = hex.toString();
+        } catch (Exception e) {
+            accountHash = null;
+        }
+        return accountHash;
+    }
 
     private void connect(PluginCall call, Runnable ready) {
         if (billing == null) {
@@ -86,8 +111,12 @@ public final class PlayBillingPlugin extends Plugin implements PurchasesUpdatedL
                     if (getActivity() == null) { call.reject("No activity for Play checkout"); return; }
                     BillingFlowParams.ProductDetailsParams item = BillingFlowParams.ProductDetailsParams.newBuilder()
                         .setProductDetails(currentProduct).setOfferToken(offerToken).build();
-                    BillingResult launch = billing.launchBillingFlow(getActivity(),
-                        BillingFlowParams.newBuilder().setProductDetailsParamsList(Collections.singletonList(item)).build());
+                    BillingFlowParams.Builder flow = BillingFlowParams.newBuilder()
+                        .setProductDetailsParamsList(Collections.singletonList(item));
+                    // Lets the verifier prove a reinstall on this phone owns the purchase (reinstall recovery).
+                    String account = accountHash();
+                    if (account != null) flow.setObfuscatedAccountId(account);
+                    BillingResult launch = billing.launchBillingFlow(getActivity(), flow.build());
                     if (launch.getResponseCode() != BillingClient.BillingResponseCode.OK)
                         call.reject("Play checkout unavailable (" + launch.getResponseCode() + ")");
                     else { JSObject out = new JSObject(); out.put("launched", true); call.resolve(out); }
@@ -106,6 +135,12 @@ public final class PlayBillingPlugin extends Plugin implements PurchasesUpdatedL
 
     @PluginMethod public void getProduct(PluginCall call) { queryProduct(call, false); }
     @PluginMethod public void purchase(PluginCall call) { queryProduct(call, true); }
+
+    @PluginMethod public void account(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("accountHash", accountHash());
+        call.resolve(out);
+    }
 
     @PluginMethod public void restore(PluginCall call) {
         connect(call, () -> {

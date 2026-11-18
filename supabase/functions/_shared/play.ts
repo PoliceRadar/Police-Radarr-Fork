@@ -8,6 +8,7 @@ type Subscription = {
   subscriptionState?: string;
   acknowledgementState?: string;
   linkedPurchaseToken?: string;
+  externalAccountIdentifiers?: { obfuscatedExternalAccountId?: string };
   lineItems?: Array<{
     productId?: string;
     expiryTime?: string;
@@ -88,6 +89,8 @@ export function evaluateSubscription(s: Subscription, now = Date.now()) {
     state,
     productMatches: items.length > 0,
     linkedPurchaseToken: s.linkedPurchaseToken ?? null,
+    /** setObfuscatedAccountId value from checkout, as reported by Google (not by the device). */
+    googleAccountHash: s.externalAccountIdentifiers?.obfuscatedExternalAccountId ?? null,
     needsAcknowledge: s.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_PENDING',
   };
 }

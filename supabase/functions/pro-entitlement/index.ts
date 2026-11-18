@@ -1,4 +1,5 @@
-import { admin, authenticatedUser, proStatus, refreshToken } from '../_shared/store.ts';
+import { admin, authenticatedUser, claimFounderInstall, proStatus, refreshToken } from '../_shared/store.ts';
+import { CONFLICTING_OWNERSHIP, LINKED_ELSEWHERE, LINKED_ELSEWHERE_HELP } from '../_shared/ownership.ts';
 import { sha256 } from '../_shared/play.ts';
 
 const HEADERS = {
@@ -27,8 +28,13 @@ Deno.serve(async req => {
     if (body.action === 'status') return json(200, await proStatus(userId));
     if (body.action === 'verify') {
       if (typeof body.purchaseToken !== 'string') return json(400, { error: 'Missing purchase token' });
-      await refreshToken(body.purchaseToken, userId);
+      await refreshToken(body.purchaseToken, userId,
+        typeof body.accountHash === 'string' ? body.accountHash : null);
       return json(200, await proStatus(userId));
+    }
+    if (body.action === 'founder-install') {
+      // Android-only automatic founder migration; see claimFounderInstall for the trust model.
+      return json(200, await claimFounderInstall(userId, body.firstInstallTime, body.accountHash));
     }
     if (body.action === 'founder') {
       if (typeof body.founderCode !== 'string' ||
@@ -46,6 +52,8 @@ Deno.serve(async req => {
     const message = (e as Error).message ?? '';
     // Do not leak purchase tokens, service credentials, user IDs or remote API bodies.
     if (message === 'Authentication required') return json(401, { error: message });
+    if (message === LINKED_ELSEWHERE || message === CONFLICTING_OWNERSHIP)
+      return json(409, { error: LINKED_ELSEWHERE_HELP, code: 'linked_elsewhere' });
     if (message === 'Google Play does not recognize this purchase' ||
         message === 'This purchase is not Patrol Radar Pro' ||
         message === 'Invalid Play purchase token') return json(400, { error: message });
