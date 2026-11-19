@@ -20,6 +20,21 @@ export interface PlayProduct {
   basePlanId: string;
   price: string;
   currencyCode: string;
+  /** True when Play returned the eligible free-trial offer for this account. */
+  freeTrial?: boolean;
+  offerId?: string | null;
+}
+
+/** Paywall strings. The trial line is empty unless Play offered the 14-day trial. */
+export function subscriptionOfferCopy(product: { price: string; freeTrial?: boolean }): { priceLabel: string; button: string; trialNote: string } {
+  if (product.freeTrial) {
+    return {
+      priceLabel: product.price + '/month after trial',
+      button: 'Start 2-week free trial',
+      trialNote: 'Includes a 2-week free trial. You will not be charged until the trial ends. Cancel anytime in Google Play before then and you will not be billed.',
+    };
+  }
+  return { priceLabel: product.price + '/month', button: 'Subscribe with Google Play', trialNote: '' };
 }
 type NativeBilling = {
   getProduct(): Promise<PlayProduct>;

@@ -15,6 +15,8 @@ grant usage on schema public to authenticated; grant all on all tables in schema
 `);
 await db.exec(mig); await db.exec(mig); // idempotent
 await db.exec(fs.readFileSync('./supabase/migrations/20261031000000_chat_phone_filter.sql','utf8'));
+const lockdown = fs.readFileSync('./supabase/migrations/20261119180000_revoke_chat_definer_execute.sql','utf8');
+await db.exec(lockdown); await db.exec(lockdown); // idempotent
 await db.exec(`grant all on all tables in schema public to authenticated; grant usage, select on all sequences in schema public to authenticated;`);
 const A='11111111-1111-1111-1111-111111111111', B='22222222-2222-2222-2222-222222222222', C='33333333-3333-3333-3333-333333333333', D='44444444-4444-4444-4444-444444444444';
 await db.exec(`insert into auth.users(id) values ('${A}'),('${B}'),('${C}'),('${D}')`);
@@ -56,3 +58,36 @@ await db.exec(`select purge_chat()`);
 log('after purge count C', (await db.query(`select count(*) from messages where user_id='${C}'`)).rows);
 log('cron jobs', (await db.query(`select * from cron.job`)).rows);
 log('handle', (await db.query(`select daily_handle('${B}') h`)).rows);
+
+const posted = await as(B, `insert into messages(room,body) values('US-IL-champaign','after lockdown') returning id`);
+if (typeof posted === 'string') throw new Error('authenticated insert failed after definer lockdown: ' + posted);
+const priv = async (role, fn) => (await db.query(`select has_function_privilege('${role}', '${fn}', 'execute') as ok`)).rows[0].ok;
+const expectPriv = async (role, fn, allowed) => {
+  const ok = await priv(role, fn);
+  if (ok !== allowed) throw new Error(`${role} execute on ${fn}: expected ${allowed}, got ${ok}`);
+};
+await expectPriv('authenticated', 'public.is_banned(uuid)', true);
+await expectPriv('authenticated', 'public.has_current_terms(uuid)', true);
+await expectPriv('anon', 'public.is_banned(uuid)', false);
+await expectPriv('anon', 'public.has_current_terms(uuid)', false);
+for (const fn of ['public.purge_chat()', 'public.messages_before_insert()', 'public.reports_before_insert()', 'public.reports_after_insert()']) {
+  await expectPriv('anon', fn, false);
+  await expectPriv('authenticated', fn, false);
+}
+const purgeAsUser = await as(A, 'select public.purge_chat()');
+if (typeof purgeAsUser !== 'string' || !purgeAsUser.startsWith('ERR:')) throw new Error('authenticated purge_chat should be denied, got ' + JSON.stringify(purgeAsUser));
+const directTrigger = await as(A, 'select public.messages_before_insert()');
+if (typeof directTrigger !== 'string' || !directTrigger.startsWith('ERR:')) throw new Error('authenticated trigger call should be denied, got ' + JSON.stringify(directTrigger));
+const paths = (await db.query(`
+  select n.nspname, p.proname, p.proconfig
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where (n.nspname = 'public' and p.proname = 'daily_handle')
+      or (n.nspname = 'moderation' and p.proname in ('delete_message','dismiss','ban','unban'))
+`)).rows;
+const wanted = [['public','daily_handle'],['moderation','delete_message'],['moderation','dismiss'],['moderation','ban'],['moderation','unban']];
+for (const [schema, name] of wanted) {
+  const row = paths.find(r => r.nspname === schema && r.proname === name);
+  const cfg = Array.isArray(row?.proconfig) ? row.proconfig.join(',') : String(row?.proconfig ?? '');
+  if (!row || !cfg.includes('search_path=public')) throw new Error(`${schema}.${name} search_path missing: ${cfg || 'no row'}`);
+}
+log('lockdown privileges', 'ok');

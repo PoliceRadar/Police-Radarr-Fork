@@ -69,11 +69,10 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    // Required for Google Play to recognize subscription-capable app bundles.
-    // No purchase flows are exposed until server-verified entitlements are implemented.
+    // Play Billing. Checkout is PlayBillingPlugin; Pro is granted only after the server verifies the purchase.
     implementation "com.android.billingclient:billing:9.1.0"
-    // Explicitly opt in with MAPBOX_NAV_SDK_ENABLED=true and MAPBOX_DOWNLOADS_TOKEN.
-    // This is the SDK dependency only; route search and active guidance are NOT implemented.
+    // Native Mapbox Navigation SDK. Included only when MAPBOX_NAV_SDK_ENABLED=true and a downloads token is set.
+    // MapboxNavPlugin then runs turn-by-turn guidance. The downloads token is a build secret and is not packaged.
     if (System.getenv('MAPBOX_NAV_SDK_ENABLED') == 'true' &&
         (System.getenv('MAPBOX_DOWNLOADS_TOKEN') ?: rootProject.findProperty('MAPBOX_DOWNLOADS_TOKEN'))) {
         implementation "com.mapbox.navigationcore:android-ndk27:3.34.2"

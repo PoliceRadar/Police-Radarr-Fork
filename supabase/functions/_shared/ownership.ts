@@ -67,5 +67,14 @@ export function plausibleFounderInstall(ms: unknown): ms is number {
   return typeof ms === 'number' && Number.isFinite(ms) && ms >= FOUNDER_FLOOR_MS && ms < FOUNDER_CUTOFF_MS;
 }
 
+/**
+ * Founder auto-claim is off unless FOUNDER_AUTO_CLAIM is explicitly enabled.
+ * Unset, empty, "off", "0", and "false" all stay off. The one-time code path is separate.
+ */
+export function founderAutoClaimEnabled(raw: string | undefined | null): boolean {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'on' || v === 'yes';
+}
+
 /** Server keeps a subscription grant without a fresh Google read for this long (RTDN keeps it current). */
 export const SERVER_VERIFIED_TTL_MS = 3 * 24 * 3600_000;

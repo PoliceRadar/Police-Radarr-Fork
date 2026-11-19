@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.118.0';
 import { sha256, playSubscription, evaluateSubscription, acknowledgeSubscription, PRODUCT } from './play.ts';
 import {
-  decideOwnership, isAccountHash, isOwnershipRaceError, LINKED_ELSEWHERE, plausibleFounderInstall, SERVER_VERIFIED_TTL_MS,
+  decideOwnership, founderAutoClaimEnabled, isAccountHash, isOwnershipRaceError, LINKED_ELSEWHERE, plausibleFounderInstall, SERVER_VERIFIED_TTL_MS,
 } from './ownership.ts';
 
 export function admin() {
@@ -71,13 +71,13 @@ export async function refreshToken(token: string, presentedBy?: string, presente
 
 /**
  * Record a permanent founder grant for a local Android founder, or recover one after a reinstall
- * on the same phone (matching account hash). TRUST: install time is self-reported by the app, the
- * same trust level as the on-device founder unlock it mirrors. Disable with FOUNDER_AUTO_CLAIM=off.
+ * on the same phone (matching account hash). TRUST: install time is self-reported by the app.
+ * Off unless FOUNDER_AUTO_CLAIM is on, true, 1, or yes. The one-time founder code is unaffected.
  * TODO(play-integrity): require a Play Integrity verdict (MEETS_DEVICE_INTEGRITY + PLAY_RECOGNIZED)
  * before granting once the Integrity API is enabled for this app.
  */
 export async function claimFounderInstall(userId: string, firstInstallMs: unknown, accountHash: unknown) {
-  if (Deno.env.get('FOUNDER_AUTO_CLAIM') === 'off') return proStatus(userId);
+  if (!founderAutoClaimEnabled(Deno.env.get('FOUNDER_AUTO_CLAIM'))) return proStatus(userId);
   const installAt = plausibleFounderInstall(firstInstallMs) ? new Date(firstInstallMs).toISOString() : null;
   const hash = isAccountHash(accountHash) ? accountHash : null;
   if (!installAt && !hash) return proStatus(userId);

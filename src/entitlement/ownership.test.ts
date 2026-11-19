@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CONFLICTING_OWNERSHIP, decideOwnership, FOUNDER_CUTOFF_MS, isOwnershipRaceError, LINKED_ELSEWHERE, plausibleFounderInstall,
+  CONFLICTING_OWNERSHIP, decideOwnership, FOUNDER_CUTOFF_MS, founderAutoClaimEnabled, isOwnershipRaceError, LINKED_ELSEWHERE, plausibleFounderInstall,
 } from '../../supabase/functions/_shared/ownership';
 import { TESTER_CUTOFF_MS } from './pro';
 
@@ -42,5 +42,17 @@ describe('founder auto-claim window', () => {
     expect(plausibleFounderInstall(0)).toBe(false);
     expect(plausibleFounderInstall('1700000000000')).toBe(false);
     expect(plausibleFounderInstall(Number.NaN)).toBe(false);
+  });
+  it('is off unless FOUNDER_AUTO_CLAIM is explicitly enabled', () => {
+    expect(founderAutoClaimEnabled(undefined)).toBe(false);
+    expect(founderAutoClaimEnabled(null)).toBe(false);
+    expect(founderAutoClaimEnabled('')).toBe(false);
+    expect(founderAutoClaimEnabled('off')).toBe(false);
+    expect(founderAutoClaimEnabled('false')).toBe(false);
+    expect(founderAutoClaimEnabled('0')).toBe(false);
+    expect(founderAutoClaimEnabled('ON')).toBe(true);
+    expect(founderAutoClaimEnabled('true')).toBe(true);
+    expect(founderAutoClaimEnabled('1')).toBe(true);
+    expect(founderAutoClaimEnabled(' yes ')).toBe(true);
   });
 });

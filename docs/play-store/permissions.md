@@ -1,10 +1,13 @@
 # Permission & declaration justifications
 
 ## Foreground service (Play Console → App content → Foreground service permissions)
-Service `.ScanService`, types **connectedDevice** (always) + **location** (only when fine location is granted).
-- connectedDevice: "The service performs a user-started, continuous Bluetooth LE scan for nearby public-safety equipment advertisements while the screen is off. Scanning starts only when the user taps Start, shows a persistent notification, and stops on Stop. Interruption would stop detection mid-session." Video: screen-record tapping Start, the notification appearing, locking the screen, and Stop.
-- location: "While the user-started scan runs, the service keeps the device's GPS fix so each detection can be placed on a coarse 150–250 m map grid. The precise fix is only shown on screen, never stored or sent."
-If review pushes back on two types, drop `location` (keep connectedDevice) — detections would then use the last fix from when the app was visible.
+
+The release manifest (app manifest plus Mapbox Navigation SDK `com.mapbox.navigationcore:android-ndk27`, namespace `com.mapbox.navigation.core`) declares two foreground services. Paste the text in `docs/play-store/data-safety.md`.
+
+1. `io.github.missionaryj.patrolradar.ScanService`, types **connectedDevice** and **location** (location is added at runtime only when fine location is granted).
+2. `com.mapbox.navigation.core.trip.service.NavigationNotificationService`, type **location**. This is Mapbox's guidance notification. It runs only during Navigation Mode.
+
+Video: screen-record tapping Scan, the scanning notification, locking the screen, and Stop; then start a Navigation Mode trip and show its notification. Do not tell Play that the precise GPS fix never leaves the device. Navigation and place search send coordinates to Mapbox and Photon. The scan service itself does not upload that fix.
 
 ## Location permissions
 ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION are foreground ("While using the app") only. **ACCESS_BACKGROUND_LOCATION is not requested**, so no background-location declaration is needed. The foreground service is started from the visible activity, which Android counts as while-in-use.

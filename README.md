@@ -2,7 +2,7 @@
 
 A modular Vite + TypeScript web app (PWA-friendly, so it can be wrapped with Capacitor for Android later). It listens **passively** for Bluetooth Low Energy advertisements from public-safety equipment, such as Axon body cameras and TASERs, and plots your own detections on a coarse, time-decaying OpenStreetMap map.
 
-**Android app:** background scanning with the screen off. [Download APK](https://github.com/missionaryj/patrol-radar/releases/download/android-latest/patrol-radar-debug.apk), see [docs/android.md](docs/android.md).
+**Android app:** background scanning with the screen off. Install from [Google Play](https://play.google.com/store/apps/details?id=io.github.missionaryj.patrolradar) (`io.github.missionaryj.patrolradar`). Debug APKs stay as private CI artifacts and are not published. See [docs/android.md](docs/android.md).
 
 ## Quick start
 ```bash

@@ -121,6 +121,27 @@ public class PatrolScanPlugin extends Plugin {
         call.resolve(r);
     }
 
+    /**
+     * Whether this process may honor client-side Pro flags. Read-only; does not start or stop scanning.
+     * debuggable is the installed package flag (debug APKs are debuggable; Play releases are not).
+     * installer is the installing package, com.android.vending for every Play track.
+     */
+    @PluginMethod @SuppressWarnings("deprecation") public void distribution(PluginCall call) {
+        android.content.pm.ApplicationInfo app = getContext().getApplicationInfo();
+        boolean debuggable = (app.flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        String installer = null;
+        try {
+            android.content.pm.PackageManager pm = getContext().getPackageManager();
+            String pkg = getContext().getPackageName();
+            if (Build.VERSION.SDK_INT >= 30) installer = pm.getInstallSourceInfo(pkg).getInstallingPackageName();
+            else installer = pm.getInstallerPackageName(pkg);
+        } catch (Exception ignored) { /* unknown installer: client flags stay off */ }
+        JSObject r = new JSObject();
+        r.put("debuggable", debuggable);
+        r.put("installer", installer);
+        call.resolve(r);
+    }
+
     /** Epoch millis of PackageInfo.firstInstallTime. Read-only; updates do not change it. Does not start or stop scanning. */
     @PluginMethod public void firstInstallTime(PluginCall call) {
         try {

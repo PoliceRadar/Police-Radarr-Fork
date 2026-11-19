@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   FOUNDING_TESTER_KEY,
   FOUNDING_TESTER_LABEL,
+  PLAY_INSTALLER,
   TESTER_CUTOFF_MS,
+  clientFounderFlagsAllowed,
   loadProEntitlement,
   qualifiesByInstallDate,
   resolveEntitlement,
@@ -32,28 +34,40 @@ describe('install-date grandfathering', () => {
     expect(Number.isFinite(TESTER_CUTOFF_MS)).toBe(true);
   });
 
-  it('grants Pro before the cutoff', () => {
+  it('grants Pro before the cutoff on a Play release install', () => {
     expect(qualifiesByInstallDate(before)).toBe(true);
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false }))
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false, clientFlagsAllowed: true }))
       .toEqual({ pro: true, foundingTester: true });
+  });
+
+  it('ignores install time and the stored flag on debug or non-Play builds', () => {
+    expect(clientFounderFlagsAllowed({ debuggable: false, installer: PLAY_INSTALLER })).toBe(true);
+    expect(clientFounderFlagsAllowed({ debuggable: true, installer: PLAY_INSTALLER })).toBe(false);
+    expect(clientFounderFlagsAllowed({ debuggable: false, installer: 'com.android.packageinstaller' })).toBe(false);
+    expect(clientFounderFlagsAllowed({ debuggable: false, installer: null })).toBe(false);
+    expect(clientFounderFlagsAllowed(undefined)).toBe(false);
+    const blocked = { platform: 'android' as const, firstInstallTimeMs: before, persistedGrant: true, clientFlagsAllowed: false };
+    expect(resolveEntitlement(blocked)).toEqual({ pro: false, foundingTester: false });
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: true }))
+      .toEqual({ pro: false, foundingTester: false });
   });
 
   it('does not grant at the cutoff', () => {
     expect(qualifiesByInstallDate(at)).toBe(false);
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: at, persistedGrant: false }))
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: at, persistedGrant: false, clientFlagsAllowed: true }))
       .toEqual({ pro: false, foundingTester: false });
   });
 
   it('does not grant after the cutoff', () => {
     expect(qualifiesByInstallDate(after)).toBe(false);
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false }))
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false, clientFlagsAllowed: true }))
       .toEqual({ pro: false, foundingTester: false });
   });
 
   it('keeps a persisted Android grant when install time is missing or after the cutoff', () => {
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: true }))
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: true, clientFlagsAllowed: true }))
       .toEqual({ pro: true, foundingTester: true });
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: null, persistedGrant: true }))
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: null, persistedGrant: true, clientFlagsAllowed: true }))
       .toEqual({ pro: true, foundingTester: true });
   });
 
@@ -63,6 +77,7 @@ describe('install-date grandfathering', () => {
       platform: 'android',
       readInstallTime: async () => before,
       storage,
+      clientFlagsAllowed: true,
     });
     expect(first).toEqual({ pro: true, foundingTester: true });
     expect(storage.getItem(FOUNDING_TESTER_KEY)).toBe('1');
@@ -72,6 +87,7 @@ describe('install-date grandfathering', () => {
       platform: 'android',
       readInstallTime: async () => { throw new Error('bridge unavailable'); },
       storage,
+      clientFlagsAllowed: true,
     });
     expect(again).toEqual({ pro: true, foundingTester: true });
     expect(storage.writes).toBe(1);
@@ -101,6 +117,18 @@ describe('install-date grandfathering', () => {
     expect(storage.getItem(FOUNDING_TESTER_KEY)).toBeNull();
   });
 
+  it('does not store or honor the founding-tester flag when client flags are off', async () => {
+    const storage = memoryStore({ [FOUNDING_TESTER_KEY]: '1' });
+    const entitlement = await loadProEntitlement({
+      platform: 'android',
+      readInstallTime: async () => before,
+      storage,
+      clientFlagsAllowed: false,
+    });
+    expect(entitlement).toEqual({ pro: false, foundingTester: false });
+    expect(storage.writes).toBe(0);
+  });
+
   it('places the founding-tester label in Settings', () => {
     const html = readFileSync(new URL('../../v2/index.html', import.meta.url), 'utf8');
     expect(FOUNDING_TESTER_LABEL).toBe('Founding tester: Pro unlocked');
@@ -121,7 +149,7 @@ describe('install-date grandfathering', () => {
   });
 
   it('leaves purchases locked unless a caller supplies a verified purchase', () => {
-    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false }).pro).toBe(false);
+    expect(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false, clientFlagsAllowed: true }).pro).toBe(false);
     expect(resolveEntitlement({
       platform: 'web', firstInstallTimeMs: null, persistedGrant: false, verifiedPurchase: true,
     })).toEqual({ pro: true, foundingTester: false });
@@ -130,8 +158,8 @@ describe('install-date grandfathering', () => {
   it('unlocks traffic cameras only when Pro is granted', () => {
     expect(trafficCamerasUnlocked({ pro: true })).toBe(true);
     expect(trafficCamerasUnlocked({ pro: false })).toBe(false);
-    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false }))).toBe(true);
-    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false }))).toBe(false);
+    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false, clientFlagsAllowed: true }))).toBe(true);
+    expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false, clientFlagsAllowed: true }))).toBe(false);
     expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true }))).toBe(false);
   });
 

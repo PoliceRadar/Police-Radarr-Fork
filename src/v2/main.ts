@@ -38,8 +38,8 @@ import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
 import { ActivityZoneAlertGate, activityLevelLabel, considerHistoricalZoneNotice, historicalZoneStatus, zoneAlertsSavedOn, HISTORICAL_ZONE_PRO_NOTE, type ActivityZone } from '../map/historicalZones';
-import { FOUNDING_TESTER_LABEL, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
-import { PlayProClient, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
+import { FOUNDING_TESTER_LABEL, clientFounderFlagsAllowed, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
+import { PlayProClient, subscriptionOfferCopy, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
 import { cachedProValid, effectiveAccess, saveVerifiedStatus } from '../entitlement/proAccess';
 
 // A single map and BLE scanning session serve Patrol and Navigation.
@@ -1034,11 +1034,18 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   };
 
   void (async () => {
-    // Android install-date founders unlock immediately and offline; the web never does.
+    // Play release installs can unlock founding testers offline. Debug, sideload, and web cannot.
+    const scan = nativePlugin();
+    let clientFlagsAllowed = false;
+    if (scan?.distribution) {
+      try { clientFlagsAllowed = clientFounderFlagsAllowed(await scan.distribution()); }
+      catch { clientFlagsAllowed = false; }
+    }
     const hint = await loadProEntitlement({
       platform: nativePlugin() ? 'android' : 'web',
       readInstallTime: () => readNativeFirstInstallTime(nativePlugin()),
       storage: localStorage,
+      clientFlagsAllowed,
     });
     localFounder = hint.foundingTester;
     founderChecked = true;
@@ -1064,7 +1071,13 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
       if (!hasVerifiedPro) {
         const product = await proClient.getProduct();
         if (product.productId === 'patrol_radar_pro' && product.basePlanId === 'monthly') {
-          $('pro-price').textContent = product.price + '/month';
+          const copy = subscriptionOfferCopy(product);
+          $('pro-price').textContent = copy.priceLabel;
+          upgrade.textContent = copy.button;
+          const trialNote = document.getElementById('pro-trial-note');
+          if (trialNote) { trialNote.hidden = copy.trialNote === ''; trialNote.textContent = copy.trialNote; }
+          const tcTrial = document.getElementById('tc-trial-note');
+          if (tcTrial) { tcTrial.hidden = copy.trialNote === ''; tcTrial.textContent = copy.trialNote; }
           purchaseAvailable = true;
           presentPro();
         }

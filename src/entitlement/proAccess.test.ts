@@ -13,7 +13,7 @@ const founder: VerifiedStatus = { pro: true, foundingTester: true, expiresAt: nu
 
 describe('effective Pro access', () => {
   it('keeps install-date founders on Pro with no server answer (offline / Supabase down)', async () => {
-    const hint = await loadProEntitlement({ platform: 'android', readInstallTime: async () => TESTER_CUTOFF_MS - 1, storage: mem() });
+    const hint = await loadProEntitlement({ platform: 'android', readInstallTime: async () => TESTER_CUTOFF_MS - 1, storage: mem(), clientFlagsAllowed: true });
     const access = effectiveAccess({ platform: 'android', localFounder: hint.foundingTester, server: null, cached: null });
     expect(access).toMatchObject({ pro: true, foundingTester: true, source: 'local-founder' });
     expect(trafficCamerasUnlocked(access)).toBe(true);

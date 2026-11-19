@@ -20,6 +20,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import android.provider.Settings;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -85,28 +86,40 @@ public final class PlayBillingPlugin extends Plugin implements PurchasesUpdatedL
                     call.reject("Could not read Play subscription (" + result.getResponseCode() + ")");
                     return;
                 }
-                ProductDetails selected = null;
-                ProductDetails.SubscriptionOfferDetails base = null;
+                List<PlayOfferChoice.Candidate> candidates = new ArrayList<>();
                 List<ProductDetails> list = products.getProductDetailsList();
                 if (list != null) for (ProductDetails detail : list) {
                     if (!PRODUCT.equals(detail.getProductId()) || detail.getSubscriptionOfferDetails() == null) continue;
                     for (ProductDetails.SubscriptionOfferDetails offer : detail.getSubscriptionOfferDetails()) {
-                        // Choose the no-offer monthly base plan; do not silently sell a different plan.
-                        if (PLAN.equals(offer.getBasePlanId()) && offer.getOfferId() == null) {
-                            selected = detail; base = offer; break;
-                        }
+                        // Monthly base plan only. The trial offer is preferred when Play includes it.
+                        if (!PLAN.equals(offer.getBasePlanId())) continue;
+                        List<ProductDetails.PricingPhase> phases = offer.getPricingPhases().getPricingPhaseList();
+                        if (phases == null || phases.isEmpty()) continue;
+                        ProductDetails.PricingPhase price = phases.get(phases.size() - 1);
+                        candidates.add(new PlayOfferChoice.Candidate(
+                            offer.getBasePlanId(), offer.getOfferId(), offer.getOfferToken(),
+                            price.getFormattedPrice(), price.getPriceCurrencyCode(), price.getPriceAmountMicros()));
                     }
-                    if (base != null) break;
                 }
-                if (selected == null || base == null) {
+                PlayOfferChoice.Candidate chosen = PlayOfferChoice.choose(candidates);
+                ProductDetails matched = null;
+                if (chosen != null && list != null) for (ProductDetails detail : list) {
+                    if (detail.getSubscriptionOfferDetails() == null) continue;
+                    for (ProductDetails.SubscriptionOfferDetails offer : detail.getSubscriptionOfferDetails()) {
+                        if (chosen.offerToken.equals(offer.getOfferToken())) { matched = detail; break; }
+                    }
+                    if (matched != null) break;
+                }
+                if (matched == null || chosen == null) {
                     call.reject("Monthly Pro is not available for this Play account or testing track.");
                     return;
                 }
-                currentProduct = selected;
-                offerToken = base.getOfferToken();
-                List<ProductDetails.PricingPhase> phases = base.getPricingPhases().getPricingPhaseList();
-                if (phases == null || phases.isEmpty()) { call.reject("Missing Google Play price"); return; }
-                ProductDetails.PricingPhase price = phases.get(phases.size() - 1);
+                currentProduct = matched;
+                offerToken = chosen.offerToken;
+                String formattedPrice = chosen.formattedPrice;
+                String currencyCode = chosen.currencyCode;
+                long priceAmountMicros = chosen.priceAmountMicros;
+                boolean freeTrial = chosen.freeTrial();
                 if (forPurchase) {
                     if (getActivity() == null) { call.reject("No activity for Play checkout"); return; }
                     BillingFlowParams.ProductDetailsParams item = BillingFlowParams.ProductDetailsParams.newBuilder()
@@ -124,9 +137,11 @@ public final class PlayBillingPlugin extends Plugin implements PurchasesUpdatedL
                     JSObject out = new JSObject();
                     out.put("productId", PRODUCT);
                     out.put("basePlanId", PLAN);
-                    out.put("price", price.getFormattedPrice());
-                    out.put("currencyCode", price.getPriceCurrencyCode());
-                    out.put("priceAmountMicros", price.getPriceAmountMicros());
+                    out.put("price", formattedPrice);
+                    out.put("currencyCode", currencyCode);
+                    out.put("priceAmountMicros", priceAmountMicros);
+                    out.put("freeTrial", freeTrial);
+                    out.put("offerId", chosen.offerId);
                     call.resolve(out);
                 }
             });

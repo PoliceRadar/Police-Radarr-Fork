@@ -46,7 +46,7 @@ Open **Test and release → Testing → Internal testing**, **Closed testing →
 
 ## What you run
 
-**Internal, every merge.** Push to `main`, or Actions → **Android APK** → **Run workflow** → branch **main** → track **internal**. The run also refreshes the rolling `android-latest` debug APK, which is existing behavior for any non-pull-request run. Dispatching from a branch other than `main` fails the Play job and does not upload.
+**Internal, every merge.** Push to `main`, or Actions → **Android APK** → **Run workflow** → branch **main** → track **internal**. The debug APK is uploaded only as the Actions artifact `patrol-radar-debug-apk`. It is not published to a GitHub Release. Dispatching from a branch other than `main` fails the Play job and does not upload.
 
 **Closed testing.** Run workflow on `main` and choose **alpha**. The workflow does not do this on push.
 

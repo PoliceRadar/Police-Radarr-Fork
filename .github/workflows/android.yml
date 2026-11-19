@@ -17,7 +17,7 @@ on:
           - internal
           - alpha
           - beta
-permissions: { contents: write }
+permissions: { contents: read }
 # Pull requests still cancel a superseded pull request run. Pushes and manual
 # dispatches share a separate group and queue, so a second run cannot cancel
 # an in-flight Play upload. A pull request also cannot cancel that upload.
@@ -64,14 +64,6 @@ jobs:
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk patrol-radar-debug.apk
       - uses: actions/upload-artifact@v4
         with: { name: patrol-radar-debug-apk, path: patrol-radar-debug.apk }
-      - name: Publish to the rolling "android-latest" release (stable download link)
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env: { GH_TOKEN: '${{ github.token }}' }
-        run: |
-          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "Android debug APK (latest)" --notes "Debug build of the Patrol Radar Android app. Install steps: docs/android.md" --prerelease
-          git tag -f android-latest && git push -f origin android-latest
-          gh release upload android-latest patrol-radar-debug.apk --clobber
-          gh release edit android-latest --notes "Debug build from ${GITHUB_SHA::7} ($(date -u +%F)). Install steps: docs/android.md"
 
   aab:
     if: github.event_name != 'pull_request'
@@ -250,9 +242,22 @@ jobs:
           path: play
           merge-multiple: true
 
-      - name: Download native debug symbols
+      - name: See whether native debug symbols were uploaded
+        id: symbols
         if: steps.creds.outputs.enabled == 'true'
-        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          found="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name=="patrol-radar-native-debug-symbols" and .expired==false)] | length')"
+          if [ "$found" != "0" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No native debug symbols artifact. Pre-stripped vendor libraries such as Mapbox do not include debug metadata."
+          fi
+
+      - name: Download native debug symbols
+        if: steps.creds.outputs.enabled == 'true' && steps.symbols.outputs.present == 'true'
         uses: actions/download-artifact@v4
         with:
           name: patrol-radar-native-debug-symbols

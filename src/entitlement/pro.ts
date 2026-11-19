@@ -1,12 +1,15 @@
 /**
- * Pro entitlement.
+ * Local Pro hints.
  *
- * Play Billing is not connected. A paid purchase is never read from localStorage,
- * the URL, or the page. The only live grant is Android install-date grandfathering
- * for builds already installed when Open testing begins. The web app is never grandfathered.
+ * Paid Play access is not decided here. PlayBillingPlugin starts Google Play checkout,
+ * and proAccess.ts grants Pro from a server-verified subscription (or a cached server
+ * answer while the verifier cannot be reached). This module never reads a purchase
+ * from localStorage, the URL, or the page, and it does not talk to Play Billing.
  *
- * A later billing integration can pass `verifiedPurchase: true` from a server-checked
- * Play purchase. This module does not talk to Play Billing.
+ * Client-side founding-tester flags (install time and pr.foundingTester) grant Pro
+ * only when the caller passes clientFlagsAllowed. The app sets that only for a
+ * non-debuggable build installed by Google Play. Debug builds, sideloaded builds,
+ * and the web app do not grant Pro from those flags.
  */
 
 /** Open testing resumed at 2026-11-16T19:54:00-06:00. Installs strictly before this are founding testers. */
@@ -26,8 +29,13 @@ export interface EntitlementSources {
   /** True when this Android install already stored a founding-tester grant. */
   persistedGrant: boolean;
   /**
-   * Verified Play Billing entitlement. Defaults to locked.
-   * Only a future server-checked purchase may set this. Never load it from localStorage.
+   * True only for a non-debuggable Google Play install (see clientFounderFlagsAllowed).
+   * When false, install time and pr.foundingTester do not grant Pro.
+   */
+  clientFlagsAllowed?: boolean;
+  /**
+   * Server-checked Play entitlement. The app does not pass this; paid Pro is applied
+   * in proAccess.ts from the verifier. Never load it from localStorage.
    */
   verifiedPurchase?: boolean;
 }
@@ -47,10 +55,22 @@ export function qualifiesByInstallDate(firstInstallTimeMs: number | null, cutoff
   return typeof firstInstallTimeMs === 'number' && Number.isFinite(firstInstallTimeMs) && firstInstallTimeMs < cutoffMs;
 }
 
+/** Installer package for an app installed by Google Play (internal, closed, open, or production). */
+export const PLAY_INSTALLER = 'com.android.vending';
+
+/**
+ * Client-side founder flags are honored only on a release build installed by Play.
+ * A debuggable build (WebView debugging) or any sideload returns false.
+ */
+export function clientFounderFlagsAllowed(info: { debuggable?: unknown; installer?: unknown } | null | undefined): boolean {
+  return !!info && info.debuggable === false && info.installer === PLAY_INSTALLER;
+}
+
 export function resolveEntitlement(sources: EntitlementSources, cutoffMs = TESTER_CUTOFF_MS): ProEntitlement {
   const verifiedPurchase = sources.verifiedPurchase === true;
   if (sources.platform !== 'android') return { pro: verifiedPurchase, foundingTester: false };
-  const foundingTester = sources.persistedGrant || qualifiesByInstallDate(sources.firstInstallTimeMs, cutoffMs);
+  const foundingTester = sources.clientFlagsAllowed === true &&
+    (sources.persistedGrant || qualifiesByInstallDate(sources.firstInstallTimeMs, cutoffMs));
   return { pro: foundingTester || verifiedPurchase, foundingTester };
 }
 
@@ -64,19 +84,23 @@ export function parseInstallTime(value: unknown): number | null {
 }
 
 /**
- * Resolve Pro for this launch. On Android, a qualifying install time is stored locally
- * so a later launch still grants Pro if the bridge cannot be read. Web never stores or honors the flag.
+ * Resolve Pro for this launch. On a Play release build, a qualifying install time is stored
+ * locally so a later launch still grants Pro if the bridge cannot be read. Debug, sideload,
+ * and web never store or honor the flag.
  */
 export async function loadProEntitlement(opts: {
   platform: EntitlementPlatform;
   readInstallTime?: () => Promise<unknown>;
   storage?: GrantStore;
+  /** From clientFounderFlagsAllowed. Omitted or false ignores install time and pr.foundingTester. */
+  clientFlagsAllowed?: boolean;
   verifiedPurchase?: boolean;
   cutoffMs?: number;
 }): Promise<ProEntitlement> {
   const platform: EntitlementPlatform = opts.platform === 'android' ? 'android' : 'web';
+  const clientFlagsAllowed = opts.clientFlagsAllowed === true;
   let persistedGrant = false;
-  if (platform === 'android' && opts.storage) {
+  if (platform === 'android' && clientFlagsAllowed && opts.storage) {
     try { persistedGrant = opts.storage.getItem(FOUNDING_TESTER_KEY) === '1'; } catch { persistedGrant = false; }
   }
   let firstInstallTimeMs: number | null = null;
@@ -88,6 +112,7 @@ export async function loadProEntitlement(opts: {
     platform,
     firstInstallTimeMs,
     persistedGrant,
+    clientFlagsAllowed,
     verifiedPurchase: opts.verifiedPurchase === true,
   }, opts.cutoffMs);
   if (entitlement.foundingTester && opts.storage?.getItem(FOUNDING_TESTER_KEY) !== '1') {

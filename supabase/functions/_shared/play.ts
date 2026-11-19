@@ -12,7 +12,7 @@ type Subscription = {
   lineItems?: Array<{
     productId?: string;
     expiryTime?: string;
-    offerDetails?: { basePlanId?: string };
+    offerDetails?: { basePlanId?: string; offerId?: string };
   }>;
 };
 
@@ -81,6 +81,8 @@ export function evaluateSubscription(s: Subscription, now = Date.now()) {
     item.productId === PRODUCT && (!item.offerDetails?.basePlanId || item.offerDetails.basePlanId === BASE_PLAN));
   const expiry = Math.max(0, ...items.map(item => Date.parse(item.expiryTime ?? '') || 0));
   const state = s.subscriptionState ?? 'UNKNOWN';
+  // A free trial (offer id free-trial-10d) is SUBSCRIPTION_STATE_ACTIVE until expiryTime,
+  // which Google sets to the end of the trial. RTDN uses this same function via refreshToken.
   const stateEligible = ['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
     'SUBSCRIPTION_STATE_CANCELED'].includes(state);
   return {

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { subscriptionOfferCopy } from './playBilling';
 
 const app = readFileSync('src/v2/main.ts', 'utf8');
 const ui = readFileSync('v2/index.html', 'utf8');
@@ -36,6 +37,8 @@ describe('Play subscription security boundaries', () => {
   it('offers purchases only through native Play and includes restore and pending flow', () => {
     expect(plugin).toContain('BillingClient.ProductType.SUBS');
     expect(plugin).toContain('PLAN.equals(offer.getBasePlanId())');
+    expect(plugin).toContain('PlayOfferChoice.choose');
+    expect(readFileSync('android/app/src/main/java/io/github/missionaryj/patrolradar/PlayOfferChoice.java', 'utf8')).toContain('free-trial-10d');
     expect(plugin).toContain('notifyListeners("purchaseUpdated"');
     expect(plugin).toContain('QueryPurchasesParams');
     expect(ui).toContain('id="heat-upgrade"');
@@ -76,6 +79,29 @@ describe('Play subscription security boundaries', () => {
     expect(plugin).toContain('MessageDigest.getInstance("SHA-256")');
     expect(endpoint).toContain("json(409, { error: LINKED_ELSEWHERE_HELP, code: 'linked_elsewhere' })");
     expect(endpoint).toContain("body.action === 'founder-install'");
+  });
+  it('mentions the 2-week trial only when Play offers it', () => {
+    expect(subscriptionOfferCopy({ price: '$1.99', freeTrial: true })).toEqual({
+      priceLabel: '$1.99/month after trial',
+      button: 'Start 2-week free trial',
+      trialNote: 'Includes a 2-week free trial. You will not be charged until the trial ends. Cancel anytime in Google Play before then and you will not be billed.',
+    });
+    const base = subscriptionOfferCopy({ price: '$1.99' });
+    expect(base.trialNote).toBe('');
+    expect(base.button).toBe('Subscribe with Google Play');
+    expect(base.priceLabel).toBe('$1.99/month');
+  });
+  it('stops publishing the debug APK and gates the symbols download', () => {
+    const workflow = readFileSync('.github/workflows/android.yml', 'utf8');
+    expect(workflow).not.toContain('android-latest');
+    expect(workflow).not.toContain('gh release');
+    expect(workflow).toContain('patrol-radar-debug-apk');
+    expect(workflow).toContain('steps.symbols.outputs.present == \'true\'');
+    expect(workflow).not.toContain('continue-on-error: true');
+  });
+  it('keeps founder auto-claim off unless the env flag is enabled', () => {
+    expect(server).toContain('founderAutoClaimEnabled');
+    expect(server).not.toContain("=== 'off'");
   });
   it('uses a billing-only auth session, not the chat session', () => {
     expect(billingClient).toContain("PRO_AUTH_STORAGE_KEY = 'pr.pro.auth'");

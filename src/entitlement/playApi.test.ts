@@ -33,6 +33,21 @@ describe('Google Play server subscription rules', () => {
       { productId: product, offerDetails: { basePlanId: 'yearly' }, expiryTime: new Date(NOW + 86400000).toISOString() },
     ] }, NOW).active).toBe(false);
   });
+  it('treats a free-trial subscription as active Pro until the trial expiry', () => {
+    const status = evaluateSubscription({
+      subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
+      acknowledgementState: 'ACKNOWLEDGEMENT_STATE_PENDING',
+      lineItems: [{
+        productId: product,
+        expiryTime: new Date(NOW + 14 * 86400000).toISOString(),
+        offerDetails: { basePlanId, offerId: 'free-trial-10d' },
+      }],
+    }, NOW);
+    expect(status.active).toBe(true);
+    expect(status.productMatches).toBe(true);
+    expect(status.needsAcknowledge).toBe(true);
+    expect(status.expiresAt).toBe(new Date(NOW + 14 * 86400000).toISOString());
+  });
   it('reports pending acknowledgement for fulfilled active purchases', () => {
     const status = evaluateSubscription({
       ...valid,

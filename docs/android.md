@@ -5,14 +5,11 @@ foreground service, so scanning keeps going with the screen off or the phone in 
 `/v2/index.html` (`server.appStartPath`). The public site root redirects to that same document and keeps
 the query string and hash.
 
-**Download (always the latest build):**
-https://github.com/missionaryj/patrol-radar/releases/download/android-latest/patrol-radar-debug.apk
+**Install:** [Google Play](https://play.google.com/store/apps/details?id=io.github.missionaryj.patrolradar), package `io.github.missionaryj.patrolradar`. Updates come from Play. The debug APK is a GitHub Actions artifact for maintainers only. It is not attached to a public release, and a debug or sideloaded build does not unlock Pro from client-side flags.
 
 ## Install
-1. On the phone, open the link above in Chrome and download `patrol-radar-debug.apk`.
-2. Open it. Android asks to allow installs from Chrome ("Install unknown apps"): tap **Settings → Allow from this source**, go back, tap **Install**.
-3. If Play Protect warns about an unknown developer, tap **More details → Install anyway** (it is a debug build, not from the Play Store).
-4. Updates: download the link again and install over the top. Your saved data stays.
+1. Open the Play listing on the phone and install Patrol Radar.
+2. Play delivers updates. Saved app data stays across those updates.
 
 ## First run
 1. Open **Patrol Radar**. The backend is set to **Android app (background)** automatically.
@@ -32,11 +29,11 @@ https://github.com/missionaryj/patrol-radar/releases/download/android-latest/pat
 "Devices: Police gear only" (default) uses hardware scan filters for the police signatures; this is what keeps working with the
 screen off. "All devices" scans everything but Android pauses unfiltered scans while the screen is off.
 
-## Privacy (unchanged from the web version)
+## Privacy
 - Passive only: `startScan` only. No connect, pair, bond or write; the app does not even request BLUETOOTH_CONNECT.
 - MAC addresses are hashed with a random per-session salt inside the native service; the MAC never reaches the web layer or storage. The JS layer then applies the usual per-session salted hash.
 - Unmatched devices are hidden by default; the recorder keeps matches only; saved locations are snapped to the coarse grid.
-- Nothing is uploaded. INTERNET is used only for map tiles. Storage is the same localStorage the web version uses (plus the scan-mode choice).
+- The scan service does not upload detections. The app does use the network for map tiles (OpenStreetMap and OpenFreeMap), optional navigation (Mapbox and Photon), optional City Chat and Pro verification (Supabase), and the optional crowd map. See the privacy policy.
 - `neverForLocation` is not used: it makes Android drop beacon-style adverts, and the app asks for location for the map anyway.
 
 ## Known limits
