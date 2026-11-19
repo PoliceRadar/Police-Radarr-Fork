@@ -398,6 +398,7 @@ body[data-navigation-driving="true"] .history-zone-banner{top:calc(165px + var(-
 .pro-offer small{display:block;color:var(--dim);font-size:11px;margin-top:8px}
 .pro-upgrade{width:100%;padding:12px;border:0;border-radius:10px;background:#f1bc62;color:#1a1510;font-weight:700}
 #heat-settings select:disabled{opacity:.5;cursor:not-allowed}
+#heat-settings .switch input:disabled+span{opacity:.45}
 
 /* Settings control center: dark navy surfaces and Patrol Radar red accents.
    The drawer is a fixed-height flex column. overflow:hidden (used below so

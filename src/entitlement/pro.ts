@@ -128,6 +128,15 @@ export async function readNativeFirstInstallTime(plugin: { firstInstallTime?: ()
   return result?.firstInstallTime ?? null;
 }
 
+/**
+ * Stop History map shading is included with Pro. A saved `pr.stopheat` value of
+ * `1` does not draw the layer unless verified Pro is active. The web build never
+ * passes pro here. School-zone and work-zone alerts are a separate, free check.
+ */
+export function stopHistoryShadingOn(pro: boolean, saved: string | null): boolean {
+  return pro && saved === '1';
+}
+
 /** School-zone and work-zone upcoming-camera alerts stay free for everyone. */
 export const FREE_TRAFFIC_CAMERA_ALERT_TYPES = ['school_zone', 'work_zone'] as const;
 export type FreeTrafficCameraAlertType = (typeof FREE_TRAFFIC_CAMERA_ALERT_TYPES)[number];

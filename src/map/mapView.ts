@@ -397,7 +397,7 @@ export class MapView {
     this.heatLayer.addTo(this.map); this.keepHeatUnderMarkers(); this.map.attributionControl.addAttribution(STOP_HEAT_ATTRIBUTION);
     await this.loadHeat(baseUrl); if (this.heatOn) await this.drawHeat();
   }
-  /** Free preview is limited to overview shading; full filters require a verified Pro entitlement. */
+  /** Verified Pro draws full shading. The layer is not shown without Pro; this flag only dims a layer that is already on. */
   setStopHeatPreview(preview: boolean) { this.heatPreview = preview; if (this.heatOn) void this.drawHeat(); }
   /** year / time-of-day / weekday. Null means all. Counts are recomputed from the stored buckets. */
   setStopHeatFilter(f: HeatFilter) { this.heatFilter = this.heatPreview ? { ...OPEN_FILTER } : f; if (this.heatOn) void this.drawHeat(); }

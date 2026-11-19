@@ -38,7 +38,7 @@ import { mountUpdates } from './updatesUi';
 import { mountLegend } from '../map/legend';
 import { type HeatFilter, type StopHeatIndex, heatPaint, coverageCaption } from '../map/stopHeatLayer';
 import { ActivityZoneAlertGate, activityLevelLabel, considerHistoricalZoneNotice, historicalZoneStatus, zoneAlertsSavedOn, HISTORICAL_ZONE_PRO_NOTE, type ActivityZone } from '../map/historicalZones';
-import { FOUNDING_TESTER_LABEL, clientFounderFlagsAllowed, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, trafficCamerasUnlocked } from '../entitlement/pro';
+import { FOUNDING_TESTER_LABEL, clientFounderFlagsAllowed, isFreeTrafficCameraAlertType, loadProEntitlement, parseInstallTime, readNativeFirstInstallTime, stopHistoryShadingOn, trafficCamerasUnlocked } from '../entitlement/pro';
 import { PlayProClient, subscriptionOfferCopy, type ProStatus, type RestoreResult } from '../entitlement/playBilling';
 import { cachedProValid, effectiveAccess, saveVerifiedStatus } from '../entitlement/proAccess';
 
@@ -840,13 +840,16 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     saveVerifiedStatus(localStorage, status);
     applyAccess();
     setBillingMessage(status.notice ?? (foundingTester ? 'Founding tester: complimentary Pro confirmed.' :
-      hasVerifiedPro ? 'Pro active and verified with Google Play.' : 'Free preview active.'));
+      hasVerifiedPro ? 'Pro active and verified with Google Play.' : 'Pro is not active. Stop History shading is included with Pro.'));
   };
   const filterNote = document.getElementById('heat-filter-note');
   // Assigned once the zone controls exist. Verification, restore, and founder activation all call presentPro.
   let applyZoneNoticeAccess = () => {};
+  let applyStopHeatAccess = () => {};
   let zoneNoticePro: boolean | null = null;
   const presentPro = () => {
+    // Hide shading before the preview flag can redraw it. A lapsed Pro session must not keep the layer.
+    if (!hasVerifiedPro) void map.showStopHeat(false, HEAT_URL);
     map.setStopHeatPreview(!hasVerifiedPro);
     for (const field of proFields) {
       field.disabled = !hasVerifiedPro;
@@ -859,6 +862,7 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     if (foundingEl) { foundingEl.hidden = !foundingTester; foundingEl.textContent = FOUNDING_TESTER_LABEL; }
     if (filterNote) filterNote.hidden = hasVerifiedPro;
     applyZoneNoticeAccess();
+    applyStopHeatAccess();
   };
   presentPro();
   upgrade.onclick = () => {
@@ -912,8 +916,9 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
     try { localStorage.setItem(HEAT_FILTER_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
     sync(); map.setStopHeatFilter(hasVerifiedPro ? saved : { year: null, tod: null, dow: null });
     if (sum) {
-      const shading = !ck('stopheat').checked ? 'Shading off' : !hasVerifiedPro ? 'Free preview · Pro filters locked' :
-        saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
+      const shading = !hasVerifiedPro ? 'Stop History shading is included with Pro'
+        : !ck('stopheat').checked ? 'Shading off'
+        : saved.year || saved.tod != null || saved.dow != null ? 'Shown · filtered' : 'Shown · all periods';
       const zoneBit = !hasVerifiedPro ? 'Zone notices Pro' : `Zone notices ${ck('history-zone-alerts').checked ? 'on' : 'off'}`;
       sum.textContent = `${shading} · ${zoneBit}`;
     }
@@ -922,13 +927,46 @@ const HEAT_FILTER_KEY = 'pr.stopheat.filter';
   onSel('heat-year-set', 'year');
   onSel('heat-tod-set', 'tod');
   onSel('heat-dow-set', 'dow');
-  const show = (on: boolean) => {
-    map.showStopHeat(on, HEAT_URL).then(() => { const i = map.stopHeatInfo; if (i) { fill(i); if (st) st.textContent = `${i.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(i)} · built ${i.generated.slice(0, 10)}`; } applyFilter(); })
+  const showStopHeat = () => {
+    // Saved '1' is not enough. Web and every other non-Pro session stay off, including after Pro lapses.
+    if (!stopHistoryShadingOn(hasVerifiedPro, localStorage.getItem('pr.stopheat'))) {
+      void map.showStopHeat(false, HEAT_URL);
+      return;
+    }
+    map.showStopHeat(true, HEAT_URL).then(() => { const i = map.stopHeatInfo; if (i) { fill(i); if (st) st.textContent = `${i.totals.mapped.toLocaleString()} historical source records · ${coverageCaption(i)} · built ${i.generated.slice(0, 10)}`; } applyFilter(); })
       .catch(e => { if (st) st.textContent = `Stop history unavailable (${(e as Error).message})`; });
   };
-  const m = ck('stopheat'); m.checked = localStorage.getItem('pr.stopheat') === '1';
-  m.onchange = () => { localStorage.setItem('pr.stopheat', m.checked ? '1' : '0'); applyFilter(); void show(m.checked); };
-  applyFilter(); if (m.checked) deferredMapLayers.push(() => { if(m.checked) void show(true); });
+  const m = ck('stopheat');
+  m.checked = localStorage.getItem('pr.stopheat') === '1';
+  m.onchange = () => {
+    if (!hasVerifiedPro) {
+      m.checked = localStorage.getItem('pr.stopheat') === '1';
+      void map.showStopHeat(false, HEAT_URL);
+      return;
+    }
+    localStorage.setItem('pr.stopheat', m.checked ? '1' : '0');
+    applyFilter();
+    showStopHeat();
+  };
+  applyStopHeatAccess = () => {
+    const pro = hasVerifiedPro;
+    m.disabled = !pro;
+    if (pro) {
+      m.removeAttribute('aria-describedby');
+      m.setAttribute('aria-label', 'Show historical shading');
+      m.checked = localStorage.getItem('pr.stopheat') === '1';
+    } else {
+      m.setAttribute('aria-describedby', 'heat-pro-offer');
+      m.setAttribute('aria-label', 'Show historical shading (Pro subscription required)');
+      // Keep the saved key. The switch stays off until verified Pro restores it.
+      m.checked = false;
+    }
+    showStopHeat();
+  };
+  applyStopHeatAccess();
+  applyFilter();
+  // Load after the first map frame. showStopHeat still refuses to draw without verified Pro.
+  if (m.checked) deferredMapLayers.push(() => { showStopHeat(); });
 
   // GPS-only historical activity zones: no automatic scanning, background
   // notifications, extra GPS watch, or live police-presence claim.

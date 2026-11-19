@@ -31,7 +31,7 @@ Patrol Radar Pro
 • $1.99 per month in the United States, billed by Google Play. Other countries show the price Google Play displays.
 • When Google Play offers it on your account, the monthly plan includes a 2-week free trial (offer id free-trial-10d). You are not charged until the trial ends. Cancel in Google Play before then and you are not billed.
 • Pro unlocks traffic-camera map pins and speed, red-light, and traffic-monitoring alerts, full Stop History shading and year, time-of-day, and weekday filters, and historical activity-zone notices.
-• School-zone and work-zone alerts stay free. The free Stop History preview stays available.
+• School-zone and work-zone alerts stay free. Stop History shading is included with Pro.
 • Pro is verified with Google Play. An anonymous account id is used for that check and for City Chat. There is no email sign-up.
 • Manage or cancel the subscription in Google Play. Uninstalling the app does not cancel it.
 

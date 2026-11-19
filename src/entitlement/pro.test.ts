@@ -9,6 +9,7 @@ import {
   loadProEntitlement,
   qualifiesByInstallDate,
   resolveEntitlement,
+  stopHistoryShadingOn,
   trafficCameraAlertUnlocked,
   trafficCamerasUnlocked,
   type GrantStore,
@@ -161,6 +162,39 @@ describe('install-date grandfathering', () => {
     expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false, clientFlagsAllowed: true }))).toBe(true);
     expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'android', firstInstallTimeMs: after, persistedGrant: false, clientFlagsAllowed: true }))).toBe(false);
     expect(trafficCamerasUnlocked(resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true }))).toBe(false);
+  });
+
+  it('draws Stop History shading only with verified Pro, even if it was saved on', () => {
+    expect(stopHistoryShadingOn(false, '1')).toBe(false);
+    expect(stopHistoryShadingOn(false, null)).toBe(false);
+    expect(stopHistoryShadingOn(false, '0')).toBe(false);
+    expect(stopHistoryShadingOn(true, '1')).toBe(true);
+    expect(stopHistoryShadingOn(true, null)).toBe(false);
+    expect(stopHistoryShadingOn(true, '0')).toBe(false);
+    const web = resolveEntitlement({ platform: 'web', firstInstallTimeMs: before, persistedGrant: true });
+    expect(stopHistoryShadingOn(web.pro, '1')).toBe(false);
+    const founder = resolveEntitlement({ platform: 'android', firstInstallTimeMs: before, persistedGrant: false, clientFlagsAllowed: true });
+    expect(stopHistoryShadingOn(founder.pro, '1')).toBe(true);
+
+    const html = readFileSync(new URL('../../v2/index.html', import.meta.url), 'utf8');
+    const main = readFileSync(new URL('../v2/main.ts', import.meta.url), 'utf8');
+    const toggle = html.slice(html.indexOf('id="stopheat"'), html.indexOf('id="history-zone-alerts"'));
+    expect(toggle).toContain('disabled');
+    expect(toggle).toContain('aria-describedby="heat-pro-offer"');
+    expect(toggle).toContain('Show historical shading (Pro subscription required)');
+    expect(html).toContain('Stop History shading is included with Pro');
+    expect(html).not.toContain('Free historical map preview');
+    expect(html).not.toContain('Your free preview stays available');
+    expect(html).not.toContain('The free preview uses all recorded periods');
+    expect(main).toContain('stopHistoryShadingOn(hasVerifiedPro, localStorage.getItem(\'pr.stopheat\'))');
+    expect(main).toContain('if (!hasVerifiedPro) void map.showStopHeat(false, HEAT_URL)');
+    expect(main).toContain('m.disabled = !pro');
+    expect(main).toContain("m.setAttribute('aria-describedby', 'heat-pro-offer')");
+    expect(main).toContain("m.setAttribute('aria-label', 'Show historical shading (Pro subscription required)')");
+    expect(main).toContain("m.checked = localStorage.getItem('pr.stopheat') === '1'");
+    expect(main).not.toContain('Free preview · Pro filters locked');
+    expect(main).not.toContain('Free preview active.');
+    expect(main).toContain('mountIllinoisDirectory(');
   });
 
   it('keeps school-zone and work-zone alerts free without Pro, including on web', () => {

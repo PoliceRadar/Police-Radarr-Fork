@@ -49,7 +49,7 @@ Not added: `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. Google Play only allows it fo
 
 The tables above count all 4 beat files. Per city: Chicago went from 2,955,388 to 401,402 bytes (71,504 to 11,949 vertices), Springfield from 768,916 to 110,260 bytes (19,552 to 5,065 vertices), and Champaign from 311,209 to 21,144 bytes (7,902 to 898 vertices).
 
-Screenshots of the v2 map before and after, at the same Chicago position, look the same. The Free preview still forces all periods at 0.4 opacity, and Pro filters work as before.
+Screenshots of the v2 map before and after, at the same Chicago position, look the same. That pass still had a lighter all-period preview. Stop History shading is now included with Pro and is not drawn without it.
 
 ### Why not geojson-vt or a server
 
